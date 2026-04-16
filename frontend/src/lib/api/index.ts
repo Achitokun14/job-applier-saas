@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.PUBLIC_API_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:8080');
+const API_URL = '';
 
 interface RequestOptions {
   method?: string;

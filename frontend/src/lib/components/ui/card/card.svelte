@@ -10,7 +10,7 @@
   let { class: className = "", children }: Props = $props();
 </script>
 
-<div class={cn("rounded-lg border border-border bg-card text-card-foreground shadow-sm", className)}>
+<div class={cn("rounded-xl border border-border bg-card text-card-foreground shadow-sm transition-all duration-200", className)}>
   {#if children}
     {@render children()}
   {/if}
