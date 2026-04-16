@@ -34,35 +34,13 @@ services:
           memory: 512M
     labels:
       - coolify.managed=true
-      - traefik.enable=true
-      - "traefik.http.routers.jobapplier-api.rule=Host(`jobs.murgana.online`) && PathPrefix(`/api`)"
-      - traefik.http.routers.jobapplier-api.entrypoints=https
-      - traefik.http.routers.jobapplier-api.tls=true
-      - traefik.http.routers.jobapplier-api.tls.certresolver=letsencrypt
-      - traefik.http.services.jobapplier-api.loadbalancer.server.port=8080
-      - traefik.http.routers.jobapplier-api.priority=20
-      - "traefik.http.routers.jobapplier-health.rule=Host(`jobs.murgana.online`) && Path(`/health`)"
-      - traefik.http.routers.jobapplier-health.entrypoints=https
-      - traefik.http.routers.jobapplier-health.tls=true
-      - traefik.http.routers.jobapplier-health.tls.certresolver=letsencrypt
-      - traefik.http.services.jobapplier-health.loadbalancer.server.port=8080
-      - traefik.http.routers.jobapplier-health.priority=25
-      - "traefik.http.routers.jobapplier-metrics.rule=Host(`jobs.murgana.online`) && Path(`/metrics`)"
-      - traefik.http.routers.jobapplier-metrics.entrypoints=https
-      - traefik.http.routers.jobapplier-metrics.tls=true
-      - traefik.http.routers.jobapplier-metrics.tls.certresolver=letsencrypt
-      - traefik.http.services.jobapplier-metrics.loadbalancer.server.port=8080
-      - traefik.http.routers.jobapplier-metrics.priority=25
     networks:
       default: null
-      coolify: null
 
   frontend:
     build:
       context: ./frontend
       dockerfile: ../Dockerfile.frontend
-      args:
-        PUBLIC_API_URL: 'https://jobs.murgana.online'
     expose:
       - '3000'
     depends_on:
@@ -70,6 +48,7 @@ services:
     environment:
       HOSTNAME: '0.0.0.0'
       PORT: '3000'
+      BACKEND_URL: 'http://backend:8080'
       PUBLIC_API_URL: 'https://jobs.murgana.online'
     restart: unless-stopped
     healthcheck:
@@ -81,7 +60,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 512M
     labels:
       - coolify.managed=true
       - traefik.enable=true
@@ -90,7 +69,6 @@ services:
       - traefik.http.routers.jobapplier-web.tls=true
       - traefik.http.routers.jobapplier-web.tls.certresolver=letsencrypt
       - traefik.http.services.jobapplier-web.loadbalancer.server.port=3000
-      - traefik.http.routers.jobapplier-web.priority=10
       - "traefik.http.routers.jobapplier-http.rule=Host(`jobs.murgana.online`)"
       - traefik.http.routers.jobapplier-http.entrypoints=http
       - traefik.http.middlewares.jobapplier-redirect.redirectscheme.scheme=https
