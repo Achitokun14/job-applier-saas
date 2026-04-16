@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 25mm 20mm 25mm 20mm;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Times New Roman', 'Georgia', serif;
+            font-size: 11pt;
+            line-height: 1.4;
+            color: #000000;
+        }
+
+        .resume {
+            max-width: 100%;
+        }
+
+        /* Header */
+        header {
+            text-align: center;
+            border-bottom: 2px solid #000000;
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+
+        header h1 {
+            font-size: 20pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 6px;
+        }
+
+        .contact-info {
+            font-size: 10pt;
+            color: #333333;
+        }
+
+        .contact-info span {
+            margin: 0 6px;
+        }
+
+        .contact-info a {
+            color: #000000;
+            text-decoration: underline;
+        }
+
+        /* Sections */
+        section {
+            margin-bottom: 14px;
+        }
+
+        section h2 {
+            font-size: 12pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            border-bottom: 1px solid #000000;
+            padding-bottom: 3px;
+            margin-bottom: 8px;
+        }
+
+        .summary-text {
+            font-size: 11pt;
+            text-align: justify;
+        }
+
+        /* Experience & Education entries */
+        .entry {
+            margin-bottom: 12px;
+            page-break-inside: avoid;
+        }
+
+        .entry-line {
+            display: block;
+            margin-bottom: 2px;
+        }
+
+        .entry-title {
+            font-weight: bold;
+            font-size: 11pt;
+        }
+
+        .entry-company {
+            font-style: italic;
+            font-size: 11pt;
+        }
+
+        .entry-meta {
+            font-size: 10pt;
+            color: #444444;
+            margin-bottom: 4px;
+        }
+
+        .entry p {
+            font-size: 11pt;
+            text-align: justify;
+        }
+
+        .entry ul {
+            margin: 4px 0 0 22px;
+            padding: 0;
+        }
+
+        .entry ul li {
+            font-size: 11pt;
+            margin-bottom: 2px;
+            text-align: justify;
+        }
+
+        /* Skills */
+        .skills-text {
+            font-size: 11pt;
+            line-height: 1.6;
+        }
+
+        /* Projects */
+        .project-name {
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="resume">
+        <header>
+            <h1>{{ name }}</h1>
+            <div class="contact-info">
+                {% if email %}<span>{{ email }}</span>{% endif %}
+                {% if phone %}<span>|</span><span>{{ phone }}</span>{% endif %}
+                {% if location %}<span>|</span><span>{{ location }}</span>{% endif %}
+            </div>
+            {% if linkedin or github %}
+            <div class="contact-info">
+                {% if linkedin %}<a href="{{ linkedin }}">LinkedIn</a>{% endif %}
+                {% if github %}<span>|</span> <a href="{{ github }}">GitHub</a>{% endif %}
+            </div>
+            {% endif %}
+        </header>
+
+        {% if summary %}
+        <section>
+            <h2>Professional Summary</h2>
+            <p class="summary-text">{{ summary }}</p>
+        </section>
+        {% endif %}
+
+        {% if experience %}
+        <section>
+            <h2>Professional Experience</h2>
+            {% for exp in experience %}
+            <div class="entry">
+                <div class="entry-line">
+                    <span class="entry-title">{{ exp.title }}</span>{% if exp.company %}, <span class="entry-company">{{ exp.company }}</span>{% endif %}
+                </div>
+                <div class="entry-meta">
+                    {% if exp.location %}{{ exp.location }} | {% endif %}{{ exp.dates }}
+                </div>
+                {% if exp.description %}
+                <p>{{ exp.description }}</p>
+                {% endif %}
+                {% if exp.responsibilities %}
+                <ul>
+                    {% for item in exp.responsibilities %}
+                    <li>{{ item }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </section>
+        {% endif %}
+
+        {% if education %}
+        <section>
+            <h2>Education</h2>
+            {% for edu in education %}
+            <div class="entry">
+                <div class="entry-line">
+                    <span class="entry-title">{{ edu.degree }}</span>{% if edu.institution %}, <span class="entry-company">{{ edu.institution }}</span>{% endif %}
+                </div>
+                <div class="entry-meta">{{ edu.dates }}</div>
+                {% if edu.description %}
+                <p>{{ edu.description }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </section>
+        {% endif %}
+
+        {% if skills %}
+        <section>
+            <h2>Skills</h2>
+            <p class="skills-text">{{ skills | join(', ') }}</p>
+        </section>
+        {% endif %}
+
+        {% if projects %}
+        <section>
+            <h2>Projects</h2>
+            {% for proj in projects %}
+            <div class="entry">
+                <span class="project-name">{{ proj.name }}</span>
+                {% if proj.description %}
+                <p>{{ proj.description }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </section>
+        {% endif %}
+    </div>
+</body>
+</html>
