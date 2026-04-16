@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -93,6 +94,18 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate email format
+	if !strings.Contains(input.Email, "@") || !strings.Contains(input.Email, ".") {
+		h.respondError(w, http.StatusBadRequest, "Invalid email format")
+		return
+	}
+
+	// Validate password strength
+	if len(input.Password) < 8 {
+		h.respondError(w, http.StatusBadRequest, "Password must be at least 8 characters")
+		return
+	}
+
 	var existing models.User
 	if err := h.db.Where("email = ?", input.Email).First(&existing).Error; err == nil {
 		h.respondError(w, http.StatusConflict, "Email already registered")
@@ -101,6 +114,7 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
+		log.Printf("ERROR: Failed to hash password for %s: %v", input.Email, err)
 		h.respondError(w, http.StatusInternalServerError, "Failed to hash password")
 		return
 	}
@@ -113,7 +127,8 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.db.Create(&user).Error; err != nil {
-		h.respondError(w, http.StatusInternalServerError, "Failed to create user")
+		log.Printf("ERROR: Failed to create user %s: %v", input.Email, err)
+		h.respondError(w, http.StatusInternalServerError, "Failed to create user: "+err.Error())
 		return
 	}
 
