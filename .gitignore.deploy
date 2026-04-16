@@ -1,0 +1,5 @@
+# VPS deployment files - DO NOT COMMIT SENSITIVE DATA
+.env
+*.log
+caddy-logs/
+nginx_logs/
