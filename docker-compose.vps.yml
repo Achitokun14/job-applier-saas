@@ -1,0 +1,199 @@
+services:
+  backend:
+    build:
+      context: /opt/job-applier-saas/backend
+      dockerfile: /opt/job-applier-saas/Dockerfile.backend
+    expose:
+      - '8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: 'postgresql://jobapplier:${DB_PASSWORD}@postgres:5432/jobapplier?sslmode=disable'
+      JWT_SECRET: '${JWT_SECRET}'
+      JWT_EXPIRY: '24h'
+      PYTHON_SERVICE_URL: 'http://python-service:8001'
+      REDIS_URL: 'redis:6379'
+      APP_ENV: 'production'
+      ENCRYPTION_KEY: '${ENCRYPTION_KEY}'
+      CORS_ALLOWED_ORIGINS: 'https://jobs.murgana.online'
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8080/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    labels:
+      - coolify.managed=true
+      - traefik.enable=true
+      - traefik.http.routers.jobapplier-api.rule=Host(`jobs.murgana.online`) && PathPrefix(`/api`)
+      - traefik.http.routers.jobapplier-api.entrypoints=https
+      - traefik.http.routers.jobapplier-api.tls=true
+      - traefik.http.routers.jobapplier-api.tls.certresolver=letsencrypt
+      - traefik.http.services.jobapplier-api.loadbalancer.server.port=8080
+      - traefik.http.routers.jobapplier-api.priority=20
+      - traefik.http.routers.jobapplier-health.rule=Host(`jobs.murgana.online`) && Path(`/health`)
+      - traefik.http.routers.jobapplier-health.entrypoints=https
+      - traefik.http.routers.jobapplier-health.tls=true
+      - traefik.http.routers.jobapplier-health.tls.certresolver=letsencrypt
+      - traefik.http.services.jobapplier-health.loadbalancer.server.port=8080
+      - traefik.http.routers.jobapplier-health.priority=25
+    networks:
+      default: null
+      coolify: null
+
+  frontend:
+    build:
+      context: /opt/job-applier-saas/frontend
+      dockerfile: /opt/job-applier-saas/Dockerfile.frontend
+    expose:
+      - '3000'
+    depends_on:
+      - backend
+    environment:
+      HOSTNAME: '0.0.0.0'
+      PORT: '3000'
+      PUBLIC_API_URL: 'https://jobs.murgana.online'
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3000/ || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      - coolify.managed=true
+      - traefik.enable=true
+      - traefik.http.routers.jobapplier-web.rule=Host(`jobs.murgana.online`)
+      - traefik.http.routers.jobapplier-web.entrypoints=https
+      - traefik.http.routers.jobapplier-web.tls=true
+      - traefik.http.routers.jobapplier-web.tls.certresolver=letsencrypt
+      - traefik.http.services.jobapplier-web.loadbalancer.server.port=3000
+      - traefik.http.routers.jobapplier-web.priority=10
+      - traefik.http.routers.jobapplier-http.rule=Host(`jobs.murgana.online`)
+      - traefik.http.routers.jobapplier-http.entrypoints=http
+      - traefik.http.middlewares.jobapplier-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.jobapplier-redirect.redirectscheme.permanent=true
+      - traefik.http.routers.jobapplier-http.middlewares=jobapplier-redirect
+    networks:
+      default: null
+      coolify: null
+
+  python-service:
+    build:
+      context: /opt/job-applier-saas/python-service
+      dockerfile: /opt/job-applier-saas/Dockerfile.python-service
+    expose:
+      - '8001'
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - data_folder:/app/data_folder
+    environment:
+      LLM_API_KEY: '${LLM_API_KEY:-}'
+      LLM_MODEL: '${LLM_MODEL:-gpt-4o-mini}'
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:8001/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    labels:
+      - coolify.managed=true
+    networks:
+      default: null
+
+  celery-worker:
+    build:
+      context: /opt/job-applier-saas/python-service
+      dockerfile: /opt/job-applier-saas/Dockerfile.python-service
+    command: celery -A src.celery_app worker --loglevel=info --concurrency=2
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - data_folder:/app/data_folder
+    environment:
+      LLM_API_KEY: '${LLM_API_KEY:-}'
+      LLM_MODEL: '${LLM_MODEL:-gpt-4o-mini}'
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    labels:
+      - coolify.managed=true
+    networks:
+      default: null
+
+  postgres:
+    image: 'postgres:15-alpine'
+    environment:
+      POSTGRES_DB: jobapplier
+      POSTGRES_USER: jobapplier
+      POSTGRES_PASSWORD: '${DB_PASSWORD}'
+    volumes:
+      - 'postgres_data:/var/lib/postgresql/data'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U jobapplier']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    labels:
+      - coolify.managed=true
+    networks:
+      default: null
+
+  redis:
+    image: 'redis:7-alpine'
+    command: 'redis-server --appendonly yes --maxmemory 200mb --maxmemory-policy allkeys-lru'
+    volumes:
+      - 'redis_data:/data'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    labels:
+      - coolify.managed=true
+    networks:
+      default: null
+
+volumes:
+  postgres_data: {}
+  redis_data: {}
+  data_folder: {}
+
+networks:
+  default:
+    name: jobapplier-network
+  coolify:
+    name: coolify
+    external: true
