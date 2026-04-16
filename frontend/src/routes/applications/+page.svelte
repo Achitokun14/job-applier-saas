@@ -6,11 +6,12 @@
   import { Card, CardContent } from '$lib/components/ui/card';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
-  import { Trash2, Calendar } from 'lucide-svelte';
+  import { Trash2, Calendar, FileText, Search, AlertCircle, Loader2 } from 'lucide-svelte';
 
   let applications = $state([]);
   let loading = $state(true);
   let error = $state('');
+  let deletingId = $state(null);
 
   onMount(async () => {
     if (!$auth.isAuthenticated) {
@@ -29,64 +30,154 @@
   });
 
   async function deleteApplication(id) {
+    deletingId = id;
     try {
       const token = $auth.token;
       await api.deleteApplication(id, token);
       applications = applications.filter(a => a.id !== id);
     } catch (e) {
       error = e.message || 'Failed to delete application';
+    } finally {
+      deletingId = null;
     }
   }
 </script>
 
-<div class="max-w-[800px] mx-auto">
-  <h1 class="text-3xl font-bold text-foreground mb-6">My Applications</h1>
+<svelte:head>
+  <title>My Applications - JobApplier</title>
+</svelte:head>
+
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8 animate-fade-in">
+    <div>
+      <h1 class="text-2xl sm:text-3xl font-bold text-foreground">My Applications</h1>
+      <p class="text-muted-foreground mt-1">Track and manage all your job applications</p>
+    </div>
+    {#if !loading && applications.length > 0}
+      <div class="flex items-center gap-2">
+        <Badge variant="secondary" class="text-xs px-3 py-1">
+          {applications.length} total
+        </Badge>
+      </div>
+    {/if}
+  </div>
+
+  {#if error}
+    <div class="flex items-start gap-3 bg-destructive/10 text-destructive text-sm p-3.5 rounded-lg mb-6 border border-destructive/20 animate-fade-in">
+      <AlertCircle size={18} class="shrink-0 mt-0.5" />
+      <span>{error}</span>
+    </div>
+  {/if}
 
   {#if loading}
-    <div class="text-center py-12 text-muted-foreground">Loading...</div>
-  {:else if error}
-    <div class="bg-destructive/10 text-destructive p-3 rounded-md mb-4 text-sm">{error}</div>
+    <!-- Skeleton -->
+    <Card class="animate-fade-in">
+      <div class="p-6 space-y-4">
+        {#each [1,2,3,4,5] as _}
+          <div class="flex items-center gap-4">
+            <div class="skeleton h-10 w-10 rounded-lg"></div>
+            <div class="flex-1 space-y-2">
+              <div class="skeleton h-4 w-48"></div>
+              <div class="skeleton h-3 w-32"></div>
+            </div>
+            <div class="skeleton h-6 w-16 rounded-full"></div>
+            <div class="skeleton h-8 w-8 rounded-lg"></div>
+          </div>
+        {/each}
+      </div>
+    </Card>
   {:else if applications.length === 0}
-    <div class="text-center py-12">
-      <p class="text-muted-foreground mb-4">No applications yet.</p>
-      <a href="/jobs" class="no-underline">
-        <Button>Find Jobs</Button>
-      </a>
-    </div>
+    <!-- Empty state -->
+    <Card class="border-dashed animate-fade-in-up">
+      <CardContent class="p-16 text-center">
+        <div class="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+          <FileText size={28} class="text-muted-foreground" />
+        </div>
+        <h3 class="text-lg font-semibold text-foreground mb-2">No applications yet</h3>
+        <p class="text-sm text-muted-foreground mb-6 max-w-sm mx-auto">
+          Start by searching for jobs and submitting your first application.
+        </p>
+        <a href="/jobs" class="no-underline">
+          <Button>
+            <Search size={16} class="mr-2" />
+            Find Jobs
+          </Button>
+        </a>
+      </CardContent>
+    </Card>
   {:else}
-    <div class="flex flex-col gap-3">
-      {#each applications as app}
-        <Card>
-          <CardContent class="p-5 flex justify-between items-center gap-4">
-            <div class="flex-1 min-w-0">
-              <h3 class="text-base font-semibold text-foreground m-0">{app.job?.title || 'Unknown Position'}</h3>
-              <p class="text-sm text-muted-foreground m-0 mt-0.5">{app.job?.company || 'Unknown Company'}</p>
-              {#if app.appliedAt}
-                <div class="flex items-center gap-1.5 mt-1.5">
-                  <Calendar size={12} class="text-muted-foreground" />
-                  <span class="text-xs text-muted-foreground">Applied: {app.appliedAt}</span>
-                </div>
-              {/if}
-            </div>
-            <div class="flex items-center gap-3 shrink-0">
-              {#if app.status === 'applied'}
-                <Badge class="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 border-transparent">Applied</Badge>
-              {:else if app.status === 'interview'}
-                <Badge class="bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300 border-transparent">Interview</Badge>
-              {:else if app.status === 'offer'}
-                <Badge class="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 border-transparent">Offer</Badge>
-              {:else if app.status === 'rejected'}
-                <Badge variant="destructive">Rejected</Badge>
-              {:else}
-                <Badge variant="secondary">{app.status}</Badge>
-              {/if}
-              <Button variant="destructive" size="icon" onclick={() => deleteApplication(app.id)} class="h-8 w-8">
-                <Trash2 size={14} />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      {/each}
-    </div>
+    <!-- Table view -->
+    <Card class="animate-fade-in-up overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead>
+            <tr class="border-b border-border bg-muted/30">
+              <th class="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider p-4">Company</th>
+              <th class="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider p-4 hidden sm:table-cell">Position</th>
+              <th class="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider p-4">Status</th>
+              <th class="text-left text-xs font-medium text-muted-foreground uppercase tracking-wider p-4 hidden md:table-cell">Applied</th>
+              <th class="text-right text-xs font-medium text-muted-foreground uppercase tracking-wider p-4">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each applications as app}
+              <tr class="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors group">
+                <td class="p-4">
+                  <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                      {(app.job?.company || 'U')[0].toUpperCase()}
+                    </div>
+                    <div class="min-w-0">
+                      <div class="font-medium text-foreground text-sm truncate">{app.job?.company || 'Unknown Company'}</div>
+                      <div class="text-xs text-muted-foreground sm:hidden truncate">{app.job?.title || 'Unknown'}</div>
+                    </div>
+                  </div>
+                </td>
+                <td class="p-4 hidden sm:table-cell">
+                  <span class="text-sm text-foreground">{app.job?.title || 'Unknown Position'}</span>
+                </td>
+                <td class="p-4">
+                  {#if app.status === 'applied'}
+                    <Badge class="bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-transparent text-xs">Applied</Badge>
+                  {:else if app.status === 'interview'}
+                    <Badge class="bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-transparent text-xs">Interview</Badge>
+                  {:else if app.status === 'offer'}
+                    <Badge class="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-transparent text-xs">Offer</Badge>
+                  {:else if app.status === 'rejected'}
+                    <Badge variant="destructive" class="text-xs">Rejected</Badge>
+                  {:else}
+                    <Badge variant="secondary" class="text-xs">{app.status}</Badge>
+                  {/if}
+                </td>
+                <td class="p-4 hidden md:table-cell">
+                  <div class="flex items-center gap-1.5">
+                    <Calendar size={12} class="text-muted-foreground" />
+                    <span class="text-sm text-muted-foreground">
+                      {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : '-'}
+                    </span>
+                  </div>
+                </td>
+                <td class="p-4 text-right">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onclick={() => deleteApplication(app.id)}
+                    disabled={deletingId === app.id}
+                    class="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                  >
+                    {#if deletingId === app.id}
+                      <Loader2 size={14} class="animate-spin" />
+                    {:else}
+                      <Trash2 size={14} />
+                    {/if}
+                  </Button>
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    </Card>
   {/if}
 </div>
