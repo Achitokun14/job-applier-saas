@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 25mm 25mm 25mm 25mm;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            font-size: 11pt;
+            line-height: 1.7;
+            color: #1f2937;
+        }
+
+        .cover-letter {
+            max-width: 100%;
+        }
+
+        /* Sender info */
+        .sender-info {
+            margin-bottom: 24px;
+        }
+
+        .sender-info .sender-name {
+            font-size: 14pt;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 4px;
+        }
+
+        .sender-info p {
+            font-size: 10pt;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        /* Date */
+        .date {
+            font-size: 10pt;
+            color: #6b7280;
+            margin-bottom: 20px;
+        }
+
+        /* Recipient */
+        .recipient {
+            margin-bottom: 20px;
+        }
+
+        .recipient p {
+            font-size: 10pt;
+            color: #374151;
+            line-height: 1.5;
+        }
+
+        /* Subject line */
+        .subject {
+            font-size: 11pt;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 20px;
+        }
+
+        /* Body paragraphs */
+        .body-content p {
+            font-size: 11pt;
+            color: #1f2937;
+            text-align: justify;
+            margin-bottom: 14px;
+            line-height: 1.7;
+        }
+
+        /* Closing */
+        .closing {
+            margin-top: 24px;
+        }
+
+        .closing .sign-off {
+            font-size: 11pt;
+            color: #1f2937;
+            margin-bottom: 30px;
+        }
+
+        .closing .signature-name {
+            font-size: 11pt;
+            font-weight: 700;
+            color: #111827;
+        }
+
+        /* Divider */
+        .header-divider {
+            border: none;
+            border-top: 2px solid #2563eb;
+            margin-bottom: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="cover-letter">
+        {% if sender_name %}
+        <div class="sender-info">
+            <div class="sender-name">{{ sender_name }}</div>
+            {% if sender_email %}<p>{{ sender_email }}</p>{% endif %}
+            {% if sender_phone %}<p>{{ sender_phone }}</p>{% endif %}
+            {% if sender_location %}<p>{{ sender_location }}</p>{% endif %}
+        </div>
+        {% endif %}
+
+        <hr class="header-divider">
+
+        <div class="date">{{ date }}</div>
+
+        {% if recipient_name or company_name %}
+        <div class="recipient">
+            {% if recipient_name %}<p>{{ recipient_name }}</p>{% endif %}
+            {% if company_name %}<p>{{ company_name }}</p>{% endif %}
+            {% if company_address %}<p>{{ company_address }}</p>{% endif %}
+        </div>
+        {% endif %}
+
+        {% if subject %}
+        <div class="subject">Re: {{ subject }}</div>
+        {% endif %}
+
+        <div class="body-content">
+            {% for paragraph in paragraphs %}
+            <p>{{ paragraph }}</p>
+            {% endfor %}
+        </div>
+
+        <div class="closing">
+            <div class="sign-off">{{ sign_off | default('Sincerely,') }}</div>
+            <div class="signature-name">{{ sender_name | default('') }}</div>
+        </div>
+    </div>
+</body>
+</html>
