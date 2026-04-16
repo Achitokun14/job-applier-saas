@@ -1,0 +1,16 @@
+# SSL certificates - DO NOT COMMIT
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+
+# Let's Encrypt
+accounts/
+archive/
+live/
+renewal/
+
+# Self-signed
+self-signed/
