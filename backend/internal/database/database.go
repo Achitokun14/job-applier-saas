@@ -47,12 +47,11 @@ func Connect(databaseURL string) (*gorm.DB, error) {
 	return db, nil
 }
 
-// AutoMigrate runs GORM auto-migrations. In production, migrations should be
-// run manually using the migrate CLI tool instead.
+// AutoMigrate runs GORM auto-migrations for all models.
+// GORM AutoMigrate only adds missing columns/tables, never drops data.
 func AutoMigrate(db *gorm.DB, appEnv string) error {
 	if appEnv == "production" {
-		log.Println("WARNING: Skipping AutoMigrate in production. Run migrations manually using: go run cmd/migrate/main.go up")
-		return nil
+		log.Println("INFO: Running AutoMigrate in production (safe: only adds columns/tables)")
 	}
 
 	return db.AutoMigrate(
