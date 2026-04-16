@@ -1,0 +1,29 @@
+FROM oven/bun:1-alpine AS builder
+
+WORKDIR /app
+
+COPY package.json bun.lock* ./
+RUN bun install
+
+COPY . .
+
+ARG PUBLIC_API_URL=https://jobs.murgana.online
+ENV PUBLIC_API_URL=$PUBLIC_API_URL
+
+RUN bun run build
+
+FROM oven/bun:1-alpine AS runtime
+
+RUN apk add --no-cache curl wget
+
+WORKDIR /app
+
+COPY --from=builder /app/build ./build
+COPY --from=builder /app/package.json ./
+RUN bun install --production
+
+EXPOSE 3000
+ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+CMD ["bun", "./build/index.js"]
