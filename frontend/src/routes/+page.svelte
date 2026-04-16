@@ -1,91 +1,13 @@
 <script>
   import { auth } from '$lib/stores/auth';
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
   import { Button } from '$lib/components/ui/button';
-  import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '$lib/components/ui/card';
-
-  let settings = $state({});
-  let llmProvider = $state('openai');
-  let llmModel = $state('gpt-4o-mini');
-  let llmApiKey = $state('');
-  let jobSearchRemote = $state(true);
-  let jobSearchHybrid = $state(true);
-  let jobSearchOnsite = $state(false);
-  let experienceLevel = $state('mid_senior');
-  let jobTypes = $state('full_time');
-  let positions = $state('');
-  let locations = $state('');
-  let distance = $state(50);
-  let loading = $state(true);
-  let saving = $state(false);
-  let message = $state('');
-
-  onMount(async () => {
-    if (!$auth.isAuthenticated) {
-      goto('/login');
-      return;
-    }
-
-    try {
-      const token = $auth.token;
-      const res = await fetch('/api/v1/settings', {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
-      if (res.ok) {
-        settings = await res.json();
-        if (settings.llmProvider) llmProvider = settings.llmProvider;
-        if (settings.llmModel) llmModel = settings.llmModel;
-        if (settings.jobSearchRemote !== undefined) jobSearchRemote = settings.jobSearchRemote;
-        if (settings.jobSearchHybrid !== undefined) jobSearchHybrid = settings.jobSearchHybrid;
-        if (settings.experienceLevel) experienceLevel = settings.experienceLevel;
-        if (settings.jobTypes) jobTypes = settings.jobTypes;
-        if (settings.locations) locations = settings.locations.join(', ');
-        if (settings.distance) distance = settings.distance;
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      loading = false;
-    }
-  });
-
-  async function saveSettings() {
-    saving = true;
-    message = '';
-    try {
-      const token = $auth.token;
-      const res = await fetch('/api/v1/settings', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + token
-        },
-        body: JSON.stringify({
-          llmProvider,
-          llmModel,
-          llmApiKey,
-          jobSearchRemote,
-          jobSearchHybrid,
-          jobSearchOnsite,
-          experienceLevel,
-          jobTypes,
-          locations: locations.split(',').map(l => l.trim()).filter(l => l),
-          distance
-        })
-      });
-      if (res.ok) {
-        message = 'Settings saved!';
-      } else {
-        message = 'Failed to save settings';
-      }
-    } catch (e) {
-      message = 'Failed to save settings';
-    } finally {
-      saving = false;
-    }
-  }
+  import { Card, CardHeader, CardTitle, CardDescription } from '$lib/components/ui/card';
 </script>
+
+<svelte:head>
+  <title>JobApplier - AI-Powered Job Application Platform</title>
+  <meta name="description" content="Automate your job search with AI. Generate tailored resumes, craft cover letters, and apply to jobs automatically." />
+</svelte:head>
 
 <div class="min-h-[80vh] bg-background">
   <!-- Hero Section -->
