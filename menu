@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# ============================================================
+#  Job Applier SaaS - Universal Menu
+#  Works on: Linux, macOS, Windows (Git Bash/WSL)
+# ============================================================
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Detect OS
+detect_os() {
+    case "$(uname -s)" in
+        Linux*)     echo "linux";;
+        Darwin*)    echo "mac";;
+        MINGW*)     echo "windows";;
+        MSYS*)      echo "windows";;
+        CYGWIN*)    echo "windows";;
+        *)          echo "unknown";;
+    esac
+}
+
+OS=$(detect_os)
+
+# Run appropriate script based on OS
+run_script() {
+    local base_name="$1"
+    local bash_script="$SCRIPT_DIR/scripts/${base_name}.sh"
+    local bat_script="$SCRIPT_DIR/scripts/${base_name}.bat"
+    
+    if [ "$OS" = "windows" ]; then
+        if [ -f "$bat_script" ]; then
+            cmd.exe //c "$bat_script"
+        elif [ -f "$bash_script" ]; then
+            bash "$bash_script"
+        fi
+    else
+        if [ -f "$bash_script" ]; then
+            bash "$bash_script"
+        fi
+    fi
+}
+
+run_individual() {
+    local service="$1"
+    local action="$2"
+    local bash_script="$SCRIPT_DIR/scripts/${service}/${action}.sh"
+    local bat_script="$SCRIPT_DIR/scripts/${service}/${action}.bat"
+    
+    if [ "$OS" = "windows" ]; then
+        if [ -f "$bat_script" ]; then
+            cmd.exe //c "$bat_script"
+        elif [ -f "$bash_script" ]; then
+            bash "$bash_script"
+        fi
+    else
+        if [ -f "$bash_script" ]; then
+            bash "$bash_script"
+        fi
+    fi
+}
+
+# Colors (disabled on some Windows terminals)
+if [ "$OS" != "windows" ] || [ -n "$WSLENV" ]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    BLUE='\033[0;34m'
+    PURPLE='\033[0;35m'
+    CYAN='\033[0;36m'
+    NC='\033[0m'
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    PURPLE=''
+    CYAN=''
+    NC=''
+fi
+
+clear_screen() {
+    clear 2>/dev/null || printf '\033[2J\033[H'
+}
+
+show_header() {
+    echo "${PURPLE}"
+    echo "============================================================"
+    echo "  Job Applier SaaS - Main Menu [$OS]"
+    echo "  Automated Job Application SaaS"
+    echo "============================================================"
+    echo "${NC}"
+}
+
+show_menu() {
+    echo "${CYAN}Run All Services:${NC}"
+    echo "  1) Start All (Local)"
+    echo "  2) Start All (Docker)"
+    echo "  3) Stop All Services"
+    echo ""
+    echo "${BLUE}Individual Services:${NC}"
+    echo "  4) Start Backend"
+    echo "  5) Start Frontend"
+    echo "  6) Start Python Service"
+    echo "  7) Start TUI"
+    echo ""
+    echo "${YELLOW}Build & Install:${NC}"
+    echo "  8) Install All"
+    echo "  9) Build All"
+    echo " 10) Build Backend"
+    echo " 11) Build Frontend"
+    echo " 12) Build TUI"
+    echo ""
+    echo "${RED}Docker:${NC}"
+    echo " 13) Docker Build"
+    echo " 14) Docker Logs"
+    echo " 15) Docker Stop"
+    echo ""
+    echo "  0) Exit"
+    echo ""
+    printf "Select option: "
+}
+
+while true; do
+    clear_screen
+    show_header
+    show_menu
+    read -r choice
+
+    case $choice in
+        1) run_script "start-all" ;;
+        2) run_script "start-docker" ;;
+        3) run_script "stop-all" ;;
+        4) run_individual "backend" "start" ;;
+        5) run_individual "frontend" "start" ;;
+        6) run_individual "python-service" "start" ;;
+        7) run_individual "tui" "start" ;;
+        8) run_script "install-all" ;;
+        9)
+            echo "Building all..."
+            run_individual "backend" "build"
+            run_individual "frontend" "build"
+            run_individual "tui" "build"
+            echo "All builds complete!"
+            ;;
+        10) run_individual "backend" "build" ;;
+        11) run_individual "frontend" "build" ;;
+        12) run_individual "tui" "build" ;;
+        13) run_script "docker/build" ;;
+        14) run_script "docker/logs" ;;
+        15) run_script "docker/stop" ;;
+        0) echo "${GREEN}Goodbye!${NC}"; exit 0 ;;
+        *) echo "${RED}Invalid option${NC}" ;;
+    esac
+
+    echo ""
+    echo "${CYAN}Press Enter to continue...${NC}"
+    read -r
+done
