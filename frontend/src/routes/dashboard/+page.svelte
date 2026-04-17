@@ -25,7 +25,10 @@
       ]);
 
       if (profRes.ok) profile = await profRes.json();
-      if (appsRes.ok) applications = await appsRes.json();
+      if (appsRes.ok) {
+        const appsData = await appsRes.json();
+        applications = appsData.applications || appsData || [];
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -256,7 +259,7 @@
                     </td>
                     <td class="p-4 hidden md:table-cell">
                       <span class="text-sm text-muted-foreground">
-                        {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : '-'}
+                        {(app.applied_at || app.appliedAt) ? new Date(app.applied_at || app.appliedAt).toLocaleDateString() : '-'}
                       </span>
                     </td>
                   </tr>
