@@ -1,12 +1,14 @@
 <script>
   import { auth } from '$lib/stores/auth';
+  import { api } from '$lib/api';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { Input } from '$lib/components/ui/input';
   import { Button } from '$lib/components/ui/button';
   import { Card, CardContent } from '$lib/components/ui/card';
   import { Badge } from '$lib/components/ui/badge';
-  import { MapPin, Building2, ExternalLink, CheckCircle, Search, Filter, Briefcase, DollarSign, Loader2 } from 'lucide-svelte';
+  import { MapPin, Building2, ExternalLink, CheckCircle, Search, Filter, Briefcase, DollarSign, Loader2, Square, CheckSquare, X } from 'lucide-svelte';
+  import { toast } from 'svelte-sonner';
 
   let query = $state('');
   let location = $state('');
@@ -18,6 +20,8 @@
   let applied = $state(new Set());
   let applyingTo = $state(null);
   let searched = $state(false);
+  let selectedJobs = $state(new Set());
+  let bulkApplying = $state(false);
 
   onMount(() => {
     if (!$auth.isAuthenticated) {
@@ -30,18 +34,16 @@
     loading = true;
     error = '';
     searched = true;
+    selectedJobs = new Set();
     try {
       const token = $auth.token;
-      let url = '/api/v1/jobs?q=' + encodeURIComponent(query);
-      if (location.trim()) url += '&location=' + encodeURIComponent(location.trim());
-      if (jobType !== 'all') url += '&type=' + encodeURIComponent(jobType);
-      if (remote !== 'all') url += '&remote=' + encodeURIComponent(remote);
-      const res = await fetch(url, {
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
-      if (res.ok) {
-        jobs = await res.json();
-      }
+      const data = await api.searchJobs({
+        query: query.trim(),
+        location: location.trim() || undefined,
+        remote: remote,
+        jobType: jobType
+      }, token);
+      jobs = data.jobs || [];
     } catch (e) {
       error = 'Search failed. Please try again.';
     } finally {
@@ -53,18 +55,56 @@
     applyingTo = jobId;
     try {
       const token = $auth.token;
-      const res = await fetch('/api/v1/jobs/' + jobId + '/apply', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + token }
-      });
-      if (res.ok) {
-        applied.add(jobId);
-        applied = applied;
-      }
+      await api.applyJob(jobId, token);
+      applied = new Set([...applied, jobId]);
+      selectedJobs.delete(jobId);
+      selectedJobs = new Set(selectedJobs);
+      toast.success('Application submitted successfully!');
     } catch (e) {
-      error = 'Application failed. Please try again.';
+      toast.error('Application failed. Please try again.');
     } finally {
       applyingTo = null;
+    }
+  }
+
+  function toggleSelect(jobId) {
+    if (selectedJobs.has(jobId)) {
+      selectedJobs.delete(jobId);
+    } else {
+      selectedJobs.add(jobId);
+    }
+    selectedJobs = new Set(selectedJobs);
+  }
+
+  function selectAll() {
+    const selectableJobs = jobs.filter(j => !applied.has(j.id));
+    selectedJobs = new Set(selectableJobs.map(j => j.id));
+  }
+
+  function deselectAll() {
+    selectedJobs = new Set();
+  }
+
+  async function bulkApply() {
+    if (selectedJobs.size === 0) return;
+    bulkApplying = true;
+    try {
+      const token = $auth.token;
+      const data = await api.bulkApply(Array.from(selectedJobs), token);
+      const newApplied = new Set(applied);
+      for (const id of selectedJobs) {
+        newApplied.add(id);
+      }
+      applied = newApplied;
+      toast.success(`Applied to ${data.applied} job${data.applied !== 1 ? 's' : ''}${data.skipped ? `, ${data.skipped} skipped` : ''}`);
+      if (data.errors && data.errors.length > 0) {
+        toast.error(`${data.errors.length} error(s) during bulk apply`);
+      }
+      selectedJobs = new Set();
+    } catch (e) {
+      toast.error('Bulk apply failed. Please try again.');
+    } finally {
+      bulkApplying = false;
     }
   }
 </script>
@@ -73,7 +113,7 @@
   <title>Find Jobs - JobApplier</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 {selectedJobs.size > 0 ? 'pb-24' : ''}">
   <!-- Header -->
   <div class="mb-8 animate-fade-in">
     <h1 class="text-2xl sm:text-3xl font-bold text-foreground">Find Jobs</h1>
@@ -197,12 +237,41 @@
     {:else}
       <div class="flex items-center justify-between mb-2">
         <p class="text-sm text-muted-foreground">{jobs.length} job{jobs.length !== 1 ? 's' : ''} found</p>
+        <div class="flex items-center gap-2">
+          {#if selectedJobs.size === jobs.filter(j => !applied.has(j.id)).length && jobs.filter(j => !applied.has(j.id)).length > 0}
+            <Button variant="outline" size="sm" onclick={deselectAll}>
+              <X size={14} class="mr-1.5" />
+              Deselect All
+            </Button>
+          {:else}
+            <Button variant="outline" size="sm" onclick={selectAll}>
+              <CheckSquare size={14} class="mr-1.5" />
+              Select All
+            </Button>
+          {/if}
+        </div>
       </div>
       {#each jobs as job, i}
-        <Card class="group hover:shadow-md hover:border-primary/20 transition-all duration-300 animate-fade-in" style="animation-delay: {i * 50}ms">
+        <Card class="group hover:shadow-md hover:border-primary/20 transition-all duration-300 animate-fade-in {selectedJobs.has(job.id) ? 'border-primary/40 bg-primary/5' : ''}" style="animation-delay: {i * 50}ms">
           <CardContent class="p-5">
             <div class="flex flex-col sm:flex-row sm:items-start gap-4">
               <div class="flex items-start gap-4 flex-1 min-w-0">
+                <!-- Checkbox -->
+                {#if !applied.has(job.id)}
+                  <button
+                    onclick={() => toggleSelect(job.id)}
+                    class="mt-0.5 shrink-0 text-muted-foreground hover:text-primary transition-colors cursor-pointer"
+                    aria-label={selectedJobs.has(job.id) ? 'Deselect job' : 'Select job'}
+                  >
+                    {#if selectedJobs.has(job.id)}
+                      <CheckSquare size={20} class="text-primary" />
+                    {:else}
+                      <Square size={20} />
+                    {/if}
+                  </button>
+                {:else}
+                  <div class="w-5 shrink-0"></div>
+                {/if}
                 <!-- Company avatar -->
                 <div class="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
                   {(job.company || 'C')[0].toUpperCase()}
@@ -270,3 +339,28 @@
     {/if}
   </div>
 </div>
+
+<!-- Sticky bulk apply bar -->
+{#if selectedJobs.size > 0}
+  <div class="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur-lg shadow-lg">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <Badge variant="secondary" class="text-sm px-3 py-1">
+          {selectedJobs.size} selected
+        </Badge>
+        <button onclick={deselectAll} class="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+          Clear selection
+        </button>
+      </div>
+      <Button onclick={bulkApply} disabled={bulkApplying}>
+        {#if bulkApplying}
+          <Loader2 size={16} class="mr-2 animate-spin" />
+          Applying...
+        {:else}
+          <CheckCircle size={16} class="mr-2" />
+          Apply to {selectedJobs.size} selected
+        {/if}
+      </Button>
+    </div>
+  </div>
+{/if}
