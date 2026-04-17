@@ -68,20 +68,14 @@ func (r *JobRepository) Search(ctx context.Context, query string, source string,
 	countDB := r.db.WithContext(ctx).Model(&models.Job{})
 
 	if query != "" {
-		if r.isPostgres() {
-			// Use PostgreSQL full-text search with to_tsquery
-			// Replace spaces with & for AND-matching between terms
-			tsQuery := strings.Join(strings.Fields(query), " & ")
-			db = db.Where("search_vector @@ to_tsquery('english', ?)", tsQuery)
-			countDB = countDB.Where("search_vector @@ to_tsquery('english', ?)", tsQuery)
-		} else {
-			// Fallback to LIKE for SQLite
-			search := "%" + strings.ToLower(query) + "%"
-			db = db.Where("LOWER(title) LIKE ? OR LOWER(company) LIKE ? OR LOWER(description) LIKE ?",
-				search, search, search)
-			countDB = countDB.Where("LOWER(title) LIKE ? OR LOWER(company) LIKE ? OR LOWER(description) LIKE ?",
-				search, search, search)
-		}
+		// Use LIKE search for both PostgreSQL and SQLite.
+		// This is simpler, avoids tsquery syntax errors from user input,
+		// and performance is fine for < 100k jobs.
+		search := "%" + strings.ToLower(query) + "%"
+		db = db.Where("LOWER(title) LIKE ? OR LOWER(company) LIKE ? OR LOWER(description) LIKE ?",
+			search, search, search)
+		countDB = countDB.Where("LOWER(title) LIKE ? OR LOWER(company) LIKE ? OR LOWER(description) LIKE ?",
+			search, search, search)
 	}
 
 	if source != "" {

@@ -51,7 +51,11 @@ func (h *Handlers) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Revoke the old refresh token (rotation)
-	h.db.Model(&storedToken).Update("revoked", true)
+	if err := h.db.Model(&storedToken).Update("revoked", true).Error; err != nil {
+		log.Printf("ERROR: Failed to revoke refresh token %d: %v", storedToken.ID, err)
+		h.respondError(w, http.StatusInternalServerError, "Failed to revoke old refresh token")
+		return
+	}
 
 	// Generate new access token
 	accessToken, err := h.generateAccessToken(storedToken.UserID)
@@ -77,7 +81,11 @@ func (h *Handlers) RefreshTokenHandler(w http.ResponseWriter, r *http.Request) {
 // Logout handles user logout by blacklisting the current JWT and revoking all refresh tokens.
 // POST /api/v1/auth/logout
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	// Extract the token to get the jti claim
 	authHeader := r.Header.Get("Authorization")

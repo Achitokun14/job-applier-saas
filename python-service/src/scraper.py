@@ -1,6 +1,6 @@
 import hashlib
 import logging
-from typing import Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -9,14 +9,14 @@ logger = logging.getLogger(__name__)
 class ScrapeRequest(BaseModel):
     search_term: str
     location: Optional[str] = None
-    sites: list[str] = Field(default=["indeed", "linkedin", "glassdoor", "google"])
+    sites: List[str] = Field(default=["indeed", "linkedin", "glassdoor", "google"])
     results_wanted: int = 50
     hours_old: int = 72
     is_remote: Optional[bool] = None
     job_type: Optional[str] = None
     country: Optional[str] = None
     distance: Optional[int] = 50
-    proxies: Optional[list[str]] = None
+    proxies: Optional[List[str]] = None
 
 
 class ScrapedJob(BaseModel):
@@ -33,7 +33,7 @@ class ScrapedJob(BaseModel):
 
 
 class JobSpyScraper:
-    def scrape(self, request: ScrapeRequest) -> list[dict]:
+    def scrape(self, request: ScrapeRequest) -> List[dict]:
         from jobspy import scrape_jobs
 
         try:
@@ -76,7 +76,7 @@ class JobSpyScraper:
                 jobs.append(job)
             return jobs
         except Exception as e:
-            logger.error(f"JobSpy scrape failed: {e}")
+            logger.error(f"JobSpy scrape failed for '{request.search_term}' in '{request.location}': {type(e).__name__}: {e}")
             return []
 
     def _generate_id(self, row) -> str:

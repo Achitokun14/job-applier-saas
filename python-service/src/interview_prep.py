@@ -1,6 +1,6 @@
 import logging
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -16,15 +16,15 @@ class InterviewQuestion(BaseModel):
 
 
 class InterviewQuestions(BaseModel):
-    behavioral: list[InterviewQuestion] = Field(
+    behavioral: List[InterviewQuestion] = Field(
         default_factory=list,
         description="Behavioral interview questions (STAR method)",
     )
-    technical: list[InterviewQuestion] = Field(
+    technical: List[InterviewQuestion] = Field(
         default_factory=list,
         description="Technical interview questions about skills and knowledge",
     )
-    situational: list[InterviewQuestion] = Field(
+    situational: List[InterviewQuestion] = Field(
         default_factory=list,
         description="Situational/hypothetical scenario questions",
     )
@@ -53,11 +53,11 @@ class AnswerEvaluation(BaseModel):
         default_factory=STARAnalysis,
         description="STAR method analysis of the answer",
     )
-    strengths: list[str] = Field(
+    strengths: List[str] = Field(
         default_factory=list,
         description="Strengths of the answer",
     )
-    weaknesses: list[str] = Field(
+    weaknesses: List[str] = Field(
         default_factory=list,
         description="Areas for improvement",
     )
