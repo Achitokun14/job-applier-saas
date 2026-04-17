@@ -6,12 +6,14 @@
   import { Card, CardContent } from '$lib/components/ui/card';
   import { Badge } from '$lib/components/ui/badge';
   import { Button } from '$lib/components/ui/button';
-  import { Trash2, Calendar, FileText, Search, AlertCircle, Loader2 } from 'lucide-svelte';
+  import { Trash2, Calendar, FileText, Search, AlertCircle, Loader2, Filter } from 'lucide-svelte';
+  import { toast } from 'svelte-sonner';
 
   let applications = $state([]);
   let loading = $state(true);
   let error = $state('');
   let deletingId = $state(null);
+  let statusFilter = $state('all');
 
   onMount(async () => {
     if (!$auth.isAuthenticated) {
@@ -19,26 +21,56 @@
       return;
     }
 
+    await loadApplications();
+  });
+
+  async function loadApplications() {
+    loading = true;
+    error = '';
     try {
       const token = $auth.token;
-      applications = await api.getApplications(token);
+      const data = await api.getApplications(token);
+      applications = data.applications || data || [];
     } catch (e) {
       error = e.message || 'Failed to load applications';
     } finally {
       loading = false;
     }
-  });
+  }
+
+  let filteredApplications = $derived(
+    statusFilter === 'all'
+      ? applications
+      : applications.filter(a => a.status === statusFilter)
+  );
 
   async function deleteApplication(id) {
+    if (!window.confirm('Are you sure you want to delete this application? This action cannot be undone.')) {
+      return;
+    }
     deletingId = id;
     try {
       const token = $auth.token;
       await api.deleteApplication(id, token);
       applications = applications.filter(a => a.id !== id);
+      toast.success('Application deleted successfully');
     } catch (e) {
-      error = e.message || 'Failed to delete application';
+      toast.error(e.message || 'Failed to delete application');
     } finally {
       deletingId = null;
+    }
+  }
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    try {
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    } catch {
+      return '-';
     }
   }
 </script>
@@ -57,11 +89,29 @@
     {#if !loading && applications.length > 0}
       <div class="flex items-center gap-2">
         <Badge variant="secondary" class="text-xs px-3 py-1">
-          {applications.length} total
+          {filteredApplications.length} of {applications.length} total
         </Badge>
       </div>
     {/if}
   </div>
+
+  <!-- Status Filter -->
+  {#if !loading && applications.length > 0}
+    <div class="flex items-center gap-3 mb-6 animate-fade-in">
+      <Filter size={14} class="text-muted-foreground" />
+      <span class="text-sm text-muted-foreground">Status:</span>
+      <select
+        bind:value={statusFilter}
+        class="h-9 rounded-lg border border-input bg-background px-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        <option value="all">All statuses</option>
+        <option value="applied">Applied</option>
+        <option value="interview">Interview</option>
+        <option value="offer">Offer</option>
+        <option value="rejected">Rejected</option>
+      </select>
+    </div>
+  {/if}
 
   {#if error}
     <div class="flex items-start gap-3 bg-destructive/10 text-destructive text-sm p-3.5 rounded-lg mb-6 border border-destructive/20 animate-fade-in">
@@ -106,6 +156,22 @@
         </a>
       </CardContent>
     </Card>
+  {:else if filteredApplications.length === 0}
+    <!-- Empty filtered state -->
+    <Card class="border-dashed animate-fade-in-up">
+      <CardContent class="p-12 text-center">
+        <div class="w-14 h-14 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
+          <Filter size={24} class="text-muted-foreground" />
+        </div>
+        <h3 class="text-lg font-semibold text-foreground mb-2">No matching applications</h3>
+        <p class="text-sm text-muted-foreground mb-4 max-w-sm mx-auto">
+          No applications found with status "{statusFilter}". Try a different filter.
+        </p>
+        <Button variant="outline" onclick={() => statusFilter = 'all'}>
+          Show All
+        </Button>
+      </CardContent>
+    </Card>
   {:else}
     <!-- Table view -->
     <Card class="animate-fade-in-up overflow-hidden">
@@ -121,7 +187,7 @@
             </tr>
           </thead>
           <tbody>
-            {#each applications as app}
+            {#each filteredApplications as app}
               <tr class="border-b border-border/50 last:border-0 hover:bg-muted/20 transition-colors group">
                 <td class="p-4">
                   <div class="flex items-center gap-3">
@@ -154,7 +220,7 @@
                   <div class="flex items-center gap-1.5">
                     <Calendar size={12} class="text-muted-foreground" />
                     <span class="text-sm text-muted-foreground">
-                      {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString() : '-'}
+                      {formatDate(app.applied_at || app.appliedAt)}
                     </span>
                   </div>
                 </td>
