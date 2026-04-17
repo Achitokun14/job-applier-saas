@@ -256,7 +256,24 @@ func (h *Handlers) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.respondJSON(w, http.StatusOK, user)
+	// Flatten response: user fields + resume fields at same level
+	response := map[string]interface{}{
+		"id":             user.ID,
+		"email":          user.Email,
+		"name":           user.Name,
+		"role":           user.Role,
+		"email_verified": user.EmailVerified,
+		"personal_info":  user.Resume.PersonalInfo,
+		"education":      user.Resume.Education,
+		"experience":     user.Resume.Experience,
+		"skills":         user.Resume.Skills,
+		"projects":       user.Resume.Projects,
+		"achievements":   user.Resume.Achievements,
+		"certifications": user.Resume.Certifications,
+		"languages":      user.Resume.Languages,
+		"pdf_path":       user.Resume.PDFPath,
+	}
+	h.respondJSON(w, http.StatusOK, response)
 }
 
 func (h *Handlers) UpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -339,6 +356,8 @@ func (h *Handlers) SearchJobs(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
 	source := r.URL.Query().Get("source")
 	pageStr := r.URL.Query().Get("page")
+	location := r.URL.Query().Get("location")
+	remote := r.URL.Query().Get("remote")
 
 	page := 1
 	if pageStr != "" {
@@ -351,6 +370,25 @@ func (h *Handlers) SearchJobs(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.respondError(w, http.StatusInternalServerError, "Failed to search jobs")
 		return
+	}
+
+	// Apply additional filters that the repository doesn't handle
+	if location != "" || remote != "" {
+		filtered := make([]models.Job, 0, len(jobs))
+		for _, job := range jobs {
+			if location != "" && !strings.Contains(strings.ToLower(job.Location), strings.ToLower(location)) {
+				continue
+			}
+			if remote == "true" && !job.Remote {
+				continue
+			}
+			if remote == "false" && job.Remote {
+				continue
+			}
+			filtered = append(filtered, job)
+		}
+		jobs = filtered
+		total = int64(len(filtered))
 	}
 
 	h.respondJSON(w, http.StatusOK, map[string]interface{}{
@@ -1046,6 +1084,65 @@ func (h *Handlers) AutoApply(w http.ResponseWriter, r *http.Request) {
 		"requires_confirmation": autoApplyResult.RequiresConfirmation,
 		"screenshot_path":      autoApplyResult.ScreenshotPath,
 		"error":                autoApplyResult.Error,
+	})
+}
+
+func (h *Handlers) BulkApply(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value(userIDKey).(uint)
+
+	var input struct {
+		JobIDs []uint `json:"job_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		h.respondError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if len(input.JobIDs) == 0 {
+		h.respondError(w, http.StatusBadRequest, "No job IDs provided")
+		return
+	}
+	if len(input.JobIDs) > 50 {
+		h.respondError(w, http.StatusBadRequest, "Maximum 50 jobs per batch")
+		return
+	}
+
+	applied := 0
+	skipped := 0
+	errors := []string{}
+
+	for _, jobID := range input.JobIDs {
+		// Check job exists
+		var job models.Job
+		if err := h.db.First(&job, jobID).Error; err != nil {
+			errors = append(errors, fmt.Sprintf("Job %d not found", jobID))
+			continue
+		}
+
+		// Check not already applied
+		var existing models.Application
+		if err := h.db.Where("user_id = ? AND job_id = ?", userID, jobID).First(&existing).Error; err == nil {
+			skipped++
+			continue
+		}
+
+		// Create application
+		app := models.Application{
+			UserID:    userID,
+			JobID:     jobID,
+			Status:    "applied",
+			AppliedAt: time.Now(),
+		}
+		if err := h.db.Create(&app).Error; err != nil {
+			errors = append(errors, fmt.Sprintf("Failed to apply to job %d", jobID))
+			continue
+		}
+		applied++
+	}
+
+	h.respondJSON(w, http.StatusOK, map[string]interface{}{
+		"applied": applied,
+		"skipped": skipped,
+		"errors":  errors,
 	})
 }
 
