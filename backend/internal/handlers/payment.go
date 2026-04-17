@@ -21,7 +21,11 @@ import (
 // CreateCheckoutSession creates a Stripe Checkout Session for upgrading to Pro or Enterprise.
 // POST /api/v1/payments/checkout
 func (h *Handlers) CreateCheckoutSession(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	var input struct {
 		Tier string `json:"tier"`
@@ -63,6 +67,9 @@ func (h *Handlers) CreateCheckoutSession(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Use a fixed base URL instead of trusting the Origin header.
+	baseURL := "https://jobs.murgana.online"
+
 	// Create the Checkout Session.
 	params := &stripe.CheckoutSessionParams{
 		Customer: stripe.String(stripeCustomerID),
@@ -73,8 +80,8 @@ func (h *Handlers) CreateCheckoutSession(w http.ResponseWriter, r *http.Request)
 				Quantity: stripe.Int64(1),
 			},
 		},
-		SuccessURL: stripe.String(r.Header.Get("Origin") + "/settings?payment=success"),
-		CancelURL:  stripe.String(r.Header.Get("Origin") + "/settings?payment=canceled"),
+		SuccessURL: stripe.String(baseURL + "/settings?payment=success"),
+		CancelURL:  stripe.String(baseURL + "/settings?payment=canceled"),
 		Metadata: map[string]string{
 			"user_id": formatUint(userID),
 			"tier":    input.Tier,
@@ -135,7 +142,11 @@ func (h *Handlers) HandleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 // GetSubscription returns the user's current subscription details.
 // GET /api/v1/payments/subscription
 func (h *Handlers) GetSubscription(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	var sub models.Subscription
 	if err := h.db.Where("user_id = ?", userID).First(&sub).Error; err != nil {
@@ -153,7 +164,11 @@ func (h *Handlers) GetSubscription(w http.ResponseWriter, r *http.Request) {
 // CreateBillingPortal creates a Stripe Billing Portal session for the user.
 // GET /api/v1/payments/portal
 func (h *Handlers) CreateBillingPortal(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	var sub models.Subscription
 	if err := h.db.Where("user_id = ?", userID).First(&sub).Error; err != nil || sub.StripeCustomerID == "" {
@@ -161,9 +176,10 @@ func (h *Handlers) CreateBillingPortal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	baseURL := "https://jobs.murgana.online"
 	params := &stripe.BillingPortalSessionParams{
 		Customer:  stripe.String(sub.StripeCustomerID),
-		ReturnURL: stripe.String(r.Header.Get("Origin") + "/settings"),
+		ReturnURL: stripe.String(baseURL + "/settings"),
 	}
 
 	session, err := billingportalsession.New(params)
@@ -181,7 +197,11 @@ func (h *Handlers) CreateBillingPortal(w http.ResponseWriter, r *http.Request) {
 // CancelSubscription cancels the user's subscription at the end of the current period.
 // POST /api/v1/payments/cancel
 func (h *Handlers) CancelSubscription(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	var sub models.Subscription
 	if err := h.db.Where("user_id = ?", userID).First(&sub).Error; err != nil || sub.StripeSubscriptionID == "" {
