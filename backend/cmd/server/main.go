@@ -160,6 +160,7 @@ func main() {
 			r.Put("/profile", h.UpdateProfile)
 			r.Get("/settings", h.GetSettings)
 			r.Put("/settings", h.UpdateSettings)
+			r.Post("/jobs/bulk-apply", h.BulkApply)
 			r.Post("/jobs/ingest", h.IngestJobs)
 			r.Post("/scrape/trigger", h.TriggerScrape)
 			r.Post("/jobs/{id}/auto-apply", h.AutoApply)
