@@ -6,7 +6,8 @@
   import { Button } from '$lib/components/ui/button';
   import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '$lib/components/ui/card';
   import { Input } from '$lib/components/ui/input';
-  import { Bot, MapPin, CheckCircle, AlertCircle, Loader2, Save, Eye, EyeOff, Key } from 'lucide-svelte';
+  import { Bot, MapPin, CheckCircle, AlertCircle, Loader2, Save, Eye, EyeOff, Key, ShieldX, Briefcase } from 'lucide-svelte';
+  import { toast } from 'svelte-sonner';
 
   let settings = $state({});
   let llmProvider = $state('openai');
@@ -20,10 +21,10 @@
   let positions = $state('');
   let locations = $state('');
   let distance = $state(50);
+  let companyBlacklist = $state('');
+  let titleBlacklist = $state('');
   let loading = $state(true);
   let saving = $state(false);
-  let message = $state('');
-  let messageType = $state('success');
   let showApiKey = $state(false);
 
   onMount(async () => {
@@ -35,16 +36,29 @@
     try {
       const token = $auth.token;
       settings = await api.getSettings(token);
-      if (settings.llmProvider) llmProvider = settings.llmProvider;
-      if (settings.llmModel) llmModel = settings.llmModel;
-      if (settings.jobSearchRemote !== undefined) jobSearchRemote = settings.jobSearchRemote;
-      if (settings.jobSearchHybrid !== undefined) jobSearchHybrid = settings.jobSearchHybrid;
-      if (settings.experienceLevel) experienceLevel = settings.experienceLevel;
-      if (settings.jobTypes) jobTypes = settings.jobTypes;
-      if (settings.locations) locations = settings.locations.join(', ');
-      if (settings.distance) distance = settings.distance;
+
+      // Map snake_case API fields to local state
+      llmProvider = settings.llm_provider || settings.llmProvider || 'openai';
+      llmModel = settings.llm_model || settings.llmModel || 'gpt-4o-mini';
+      jobSearchRemote = settings.job_search_remote ?? settings.jobSearchRemote ?? true;
+      jobSearchHybrid = settings.job_search_hybrid ?? settings.jobSearchHybrid ?? true;
+      jobSearchOnsite = settings.job_search_onsite ?? settings.jobSearchOnsite ?? false;
+      experienceLevel = settings.experience_level || settings.experienceLevel || 'mid_senior';
+      jobTypes = settings.job_types || settings.jobTypes || 'full_time';
+      positions = settings.positions || '';
+      distance = settings.distance || 50;
+      companyBlacklist = settings.company_blacklist || settings.companyBlacklist || '';
+      titleBlacklist = settings.title_blacklist || settings.titleBlacklist || '';
+
+      // Locations can be array or string
+      if (Array.isArray(settings.locations)) {
+        locations = settings.locations.join(', ');
+      } else {
+        locations = settings.locations || '';
+      }
     } catch (e) {
       console.error(e);
+      toast.error('Failed to load settings');
     } finally {
       loading = false;
     }
@@ -52,27 +66,31 @@
 
   async function saveSettings() {
     saving = true;
-    message = '';
     try {
       const token = $auth.token;
-      await api.updateSettings({
-        llmProvider,
-        llmModel,
-        llmApiKey,
-        jobSearchRemote,
-        jobSearchHybrid,
-        jobSearchOnsite,
-        experienceLevel,
-        jobTypes,
+      const payload = {
+        llm_provider: llmProvider,
+        llm_model: llmModel,
+        llm_api_key: llmApiKey || undefined,
+        job_search_remote: jobSearchRemote,
+        job_search_hybrid: jobSearchHybrid,
+        job_search_onsite: jobSearchOnsite,
+        experience_level: experienceLevel,
+        job_types: jobTypes,
+        positions: positions,
         locations: locations.split(',').map(l => l.trim()).filter(l => l),
-        distance
-      }, token);
-      message = 'Settings saved successfully!';
-      messageType = 'success';
-      setTimeout(() => { message = ''; }, 3000);
+        distance: distance,
+        company_blacklist: companyBlacklist,
+        title_blacklist: titleBlacklist
+      };
+      // Remove undefined keys
+      Object.keys(payload).forEach(key => {
+        if (payload[key] === undefined) delete payload[key];
+      });
+      await api.updateSettings(payload, token);
+      toast.success('Settings saved successfully!');
     } catch (e) {
-      message = 'Failed to save settings. Please try again.';
-      messageType = 'error';
+      toast.error('Failed to save settings. Please try again.');
     } finally {
       saving = false;
     }
@@ -109,7 +127,7 @@
 
   {#if loading}
     <div class="space-y-6 animate-fade-in">
-      {#each [1,2] as _}
+      {#each [1,2,3,4] as _}
         <div class="skeleton h-64 rounded-xl"></div>
       {/each}
     </div>
@@ -264,6 +282,15 @@
           </div>
 
           <div class="space-y-2">
+            <label for="positions" class="text-sm font-medium text-foreground flex items-center gap-2">
+              <Briefcase size={14} class="text-muted-foreground" />
+              Target Positions
+            </label>
+            <Input type="text" id="positions" bind:value={positions} placeholder="e.g., Software Engineer, Full Stack Developer, Backend Engineer" />
+            <p class="text-xs text-muted-foreground">Comma-separated list of job titles you are targeting</p>
+          </div>
+
+          <div class="space-y-2">
             <label for="locations" class="text-sm font-medium text-foreground">Preferred Locations</label>
             <Input type="text" id="locations" bind:value={locations} placeholder="e.g., San Francisco, New York, Remote" />
             <p class="text-xs text-muted-foreground">Comma-separated list of preferred locations</p>
@@ -271,19 +298,49 @@
         </CardContent>
       </Card>
 
-      <!-- Save -->
-      <div class="flex flex-col sm:flex-row items-center gap-4 pt-2 animate-fade-in-up delay-200">
-        {#if message}
-          <div class="flex items-center gap-2 text-sm {messageType === 'error' ? 'text-destructive' : 'text-green-600 dark:text-green-400'}">
-            {#if messageType === 'error'}
-              <AlertCircle size={16} />
-            {:else}
-              <CheckCircle size={16} />
-            {/if}
-            {message}
+      <!-- Blacklists -->
+      <Card class="animate-fade-in-up delay-200">
+        <CardHeader class="pb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-9 h-9 rounded-lg bg-red-500/10 flex items-center justify-center">
+              <ShieldX size={16} class="text-red-500" />
+            </div>
+            <div>
+              <CardTitle class="text-base">Blacklists</CardTitle>
+              <CardDescription class="text-xs">Companies and job titles to exclude from your search results</CardDescription>
+            </div>
           </div>
-        {/if}
-        <Button type="submit" disabled={saving} class="sm:ml-auto">
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div class="space-y-2">
+            <label for="companyBlacklist" class="text-sm font-medium text-foreground">Company Blacklist</label>
+            <textarea
+              id="companyBlacklist"
+              bind:value={companyBlacklist}
+              rows="3"
+              placeholder="e.g., Acme Corp, Evil Inc, Spam LLC"
+              class="flex w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y transition-colors"
+            ></textarea>
+            <p class="text-xs text-muted-foreground">Comma-separated list of companies to exclude from job results</p>
+          </div>
+
+          <div class="space-y-2">
+            <label for="titleBlacklist" class="text-sm font-medium text-foreground">Title Blacklist</label>
+            <textarea
+              id="titleBlacklist"
+              bind:value={titleBlacklist}
+              rows="3"
+              placeholder="e.g., Sales, Marketing Manager, Cold Caller"
+              class="flex w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y transition-colors"
+            ></textarea>
+            <p class="text-xs text-muted-foreground">Comma-separated list of job title keywords to exclude</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Save -->
+      <div class="flex justify-end pt-2 animate-fade-in-up delay-300">
+        <Button type="submit" disabled={saving}>
           {#if saving}
             <Loader2 size={16} class="mr-2 animate-spin" />
             Saving...
