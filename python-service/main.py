@@ -49,7 +49,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-OUTPUT_DIR = Path("data_folder/output")
+OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", "data_folder/output"))
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 resume_generator = ResumeGenerator()
@@ -125,52 +125,22 @@ class TaskStatusResponse(BaseModel):
     error: Optional[str] = None
 
 
-# ---- Health Check ----
-
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "resume-generator"}
 
-
-# ---- Synchronous Endpoints (backward compatible) ----
 
 @app.post("/generate-resume", response_model=GenerationResponse)
 async def generate_resume(request: ResumeRequest, background_tasks: BackgroundTasks):
     try:
         resume_id = str(uuid.uuid4())[:8]
         output_path = str(OUTPUT_DIR / f"resume_{resume_id}.pdf")
-
         if request.job_url and not request.job_description:
-            job_data = job_parser.parse_url(
-                request.job_url,
-                llm_provider=request.llm_provider,
-                llm_api_key=request.llm_api_key,
-                llm_model=request.llm_model,
-            )
+            job_data = job_parser.parse_url(request.job_url, llm_provider=request.llm_provider, llm_api_key=request.llm_api_key, llm_model=request.llm_model)
             request.job_description = job_data.get("description", "")
-
-        result = resume_generator.generate(
-            resume_yaml=request.resume_yaml,
-            style=request.style,
-            job_description=request.job_description,
-            output_path=output_path,
-            llm_provider=request.llm_provider,
-            llm_api_key=request.llm_api_key,
-            llm_model=request.llm_model,
-        )
-
+        result = resume_generator.generate(resume_yaml=request.resume_yaml, style=request.style, job_description=request.job_description, output_path=output_path, llm_provider=request.llm_provider, llm_api_key=request.llm_api_key, llm_model=request.llm_model)
         logger.info(f"Generated resume: {resume_id}")
-
-        return GenerationResponse(
-            id=resume_id,
-            pdf_path=result["pdf_path"],
-            html_content=result.get("html_content"),
-            metadata={
-                "style": request.style,
-                "tailored": bool(request.job_description),
-                "word_count": result.get("word_count", 0)
-            }
-        )
+        return GenerationResponse(id=resume_id, pdf_path=result["pdf_path"], html_content=result.get("html_content"), metadata={"style": request.style, "tailored": bool(request.job_description), "word_count": result.get("word_count", 0)})
     except Exception as e:
         logger.error(f"Resume generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -181,31 +151,9 @@ async def generate_cover_letter(request: CoverLetterRequest, background_tasks: B
     try:
         letter_id = str(uuid.uuid4())[:8]
         output_path = str(OUTPUT_DIR / f"cover_letter_{letter_id}.pdf")
-
-        result = cover_letter_generator.generate(
-            resume_text=request.resume_text,
-            job_description=request.job_description,
-            job_url=request.job_url,
-            company_name=request.company_name,
-            job_title=request.job_title,
-            output_path=output_path,
-            llm_provider=request.llm_provider,
-            llm_api_key=request.llm_api_key,
-            llm_model=request.llm_model,
-        )
-
+        result = cover_letter_generator.generate(resume_text=request.resume_text, job_description=request.job_description, job_url=request.job_url, company_name=request.company_name, job_title=request.job_title, output_path=output_path, llm_provider=request.llm_provider, llm_api_key=request.llm_api_key, llm_model=request.llm_model)
         logger.info(f"Generated cover letter: {letter_id}")
-
-        return GenerationResponse(
-            id=letter_id,
-            pdf_path=result["pdf_path"],
-            html_content=result.get("html_content"),
-            metadata={
-                "company": request.company_name,
-                "job_title": request.job_title,
-                "word_count": result.get("word_count", 0)
-            }
-        )
+        return GenerationResponse(id=letter_id, pdf_path=result["pdf_path"], html_content=result.get("html_content"), metadata={"company": request.company_name, "job_title": request.job_title, "word_count": result.get("word_count", 0)})
     except Exception as e:
         logger.error(f"Cover letter generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -214,105 +162,64 @@ async def generate_cover_letter(request: CoverLetterRequest, background_tasks: B
 @app.post("/parse-job", response_model=JobParseResponse)
 async def parse_job(request: JobParseRequest):
     try:
-        job_data = job_parser.parse_url(
-            request.url,
-            llm_provider=request.llm_provider,
-            llm_api_key=request.llm_api_key,
-            llm_model=request.llm_model,
-        )
+        job_data = job_parser.parse_url(request.url, llm_provider=request.llm_provider, llm_api_key=request.llm_api_key, llm_model=request.llm_model)
         return JobParseResponse(**job_data)
     except Exception as e:
         logger.error(f"Job parsing failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---- Async Endpoints (Celery-backed) ----
-
 @app.post("/async/generate-resume", response_model=AsyncTaskResponse)
 async def async_generate_resume(request: ResumeRequest):
-    """Enqueue resume generation as an async Celery task."""
-    task = generate_resume_task.delay(
-        resume_yaml=request.resume_yaml,
-        style=request.style,
-        job_description=request.job_description,
-        llm_provider=request.llm_provider,
-        llm_model=request.llm_model,
-        llm_api_key=request.llm_api_key,
-    )
+    task = generate_resume_task.delay(resume_yaml=request.resume_yaml, style=request.style, job_description=request.job_description, llm_provider=request.llm_provider, llm_model=request.llm_model, llm_api_key=request.llm_api_key)
     logger.info(f"Enqueued async resume generation: task_id={task.id}")
     return AsyncTaskResponse(task_id=task.id, status="queued")
 
 
 @app.post("/async/generate-cover-letter", response_model=AsyncTaskResponse)
 async def async_generate_cover_letter(request: CoverLetterRequest):
-    """Enqueue cover letter generation as an async Celery task."""
-    task = generate_cover_letter_task.delay(
-        resume_text=request.resume_text,
-        job_description=request.job_description,
-        company_name=request.company_name,
-        job_title=request.job_title,
-        llm_provider=request.llm_provider,
-        llm_model=request.llm_model,
-        llm_api_key=request.llm_api_key,
-    )
+    task = generate_cover_letter_task.delay(resume_text=request.resume_text, job_description=request.job_description, company_name=request.company_name, job_title=request.job_title, llm_provider=request.llm_provider, llm_model=request.llm_model, llm_api_key=request.llm_api_key)
     logger.info(f"Enqueued async cover letter generation: task_id={task.id}")
     return AsyncTaskResponse(task_id=task.id, status="queued")
 
 
 @app.post("/async/parse-job", response_model=AsyncTaskResponse)
 async def async_parse_job(request: JobParseRequest):
-    """Enqueue job parsing as an async Celery task."""
-    task = parse_job_task.delay(
-        url=request.url,
-        llm_provider=request.llm_provider,
-        llm_model=request.llm_model,
-        llm_api_key=request.llm_api_key,
-    )
+    task = parse_job_task.delay(url=request.url, llm_provider=request.llm_provider, llm_model=request.llm_model, llm_api_key=request.llm_api_key)
     logger.info(f"Enqueued async job parsing: task_id={task.id}")
     return AsyncTaskResponse(task_id=task.id, status="queued")
 
 
 @app.get("/api/tasks/{task_id}/status", response_model=TaskStatusResponse)
 async def get_task_status(task_id: str):
-    """Check the status of a Celery task."""
     from celery.result import AsyncResult
-
     result = AsyncResult(task_id, app=celery_app)
-
-    response = TaskStatusResponse(
-        task_id=task_id,
-        status=result.status,
-    )
-
+    response = TaskStatusResponse(task_id=task_id, status=result.status)
     if result.ready():
         if result.successful():
             response.result = result.result
         else:
             response.error = str(result.result)
-
     return response
 
 
-# ---- Scrape Endpoints ----
-
 @app.post("/scrape-jobs")
 async def scrape_jobs(request: ScrapeRequest):
-    """Run JobSpy + regional scrapers, return combined deduplicated results."""
     try:
-        # Run JobSpy scraper (synchronous, so run in thread)
+        errors_list: List[str] = []
         import asyncio
         loop = asyncio.get_event_loop()
         jobspy_results = await loop.run_in_executor(None, jobspy_scraper.scrape, request)
         logger.info(f"JobSpy returned {len(jobspy_results)} jobs")
-
-        # Run regional scrapers (async)
-        regional_results = await regional_scraper.scrape_all(
-            search_term=request.search_term,
-            location=request.location,
-        )
-        logger.info(f"Regional scrapers returned {len(regional_results)} jobs")
-
-        # Combine and deduplicate by external_id
+        if not jobspy_results:
+            errors_list.append("JobSpy returned no results")
+        try:
+            regional_results = await regional_scraper.scrape_all(search_term=request.search_term, location=request.location)
+            logger.info(f"Regional scrapers returned {len(regional_results)} jobs")
+        except Exception as e:
+            logger.error(f"Regional scraper failed: {type(e).__name__}: {e}")
+            errors_list.append(f"Regional scraper error: {type(e).__name__}: {e}")
+            regional_results = []
         seen_ids = set()
         combined = []
         for job in jobspy_results + regional_results:
@@ -320,9 +227,8 @@ async def scrape_jobs(request: ScrapeRequest):
             if eid and eid not in seen_ids:
                 seen_ids.add(eid)
                 combined.append(job)
-
         logger.info(f"Total deduplicated jobs: {len(combined)}")
-        return {"jobs": combined, "total": len(combined)}
+        return {"jobs": combined, "total": len(combined), "errors": errors_list}
     except Exception as e:
         logger.error(f"Scrape failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -330,34 +236,13 @@ async def scrape_jobs(request: ScrapeRequest):
 
 @app.post("/async/scrape-jobs", response_model=AsyncTaskResponse)
 async def async_scrape_jobs(request: ScrapeRequest):
-    """Enqueue job scraping as an async Celery task."""
-    task = scrape_jobs_task.delay(
-        search_term=request.search_term,
-        location=request.location,
-        sites=request.sites,
-        results_wanted=request.results_wanted,
-        hours_old=request.hours_old,
-        is_remote=request.is_remote,
-        job_type=request.job_type,
-        country=request.country,
-        distance=request.distance,
-        proxies=request.proxies,
-    )
+    task = scrape_jobs_task.delay(search_term=request.search_term, location=request.location, sites=request.sites, results_wanted=request.results_wanted, hours_old=request.hours_old, is_remote=request.is_remote, job_type=request.job_type, country=request.country, distance=request.distance, proxies=request.proxies)
     logger.info(f"Enqueued async job scraping: task_id={task.id}")
     return AsyncTaskResponse(task_id=task.id, status="queued")
 
 
-# ---- Auto-Apply Endpoints ----
-
 @app.post("/api/auto-apply", response_model=AutoApplyResult)
 async def auto_apply(request: AutoApplyRequest):
-    """Route a job application through the appropriate strategy.
-
-    - Greenhouse/Lever ATS: fully automated API submission
-    - Form fill: fills form + screenshots, requires user confirmation
-    - Email: composes email payload, requires confirmation
-    - LinkedIn/Indeed: blocked (returns error with 'apply manually' message)
-    """
     try:
         result = await auto_applier.apply(request)
         return result
@@ -372,43 +257,15 @@ class ConfirmSubmitRequest(BaseModel):
 
 @app.post("/api/auto-apply/confirm")
 async def confirm_auto_apply(request: ConfirmSubmitRequest):
-    """Confirm and trigger actual form submission for a previously filled form.
-
-    This endpoint is called after the user reviews the screenshot of the
-    filled form and approves submission. It re-opens the page, re-fills,
-    and clicks submit.
-    """
-    # In production this would look up the saved form state by task_id,
-    # re-launch Playwright, re-fill the form, and click submit.
-    # For now we acknowledge the confirmation and let the Go backend
-    # handle the state transition.
     logger.info(f"Submission confirmed for task: {request.task_id}")
-    return {
-        "task_id": request.task_id,
-        "status": "confirmed",
-        "message": "Submission confirmation received. The form will be submitted.",
-    }
+    return {"task_id": request.task_id, "status": "confirmed", "message": "Submission confirmation received. The form will be submitted."}
 
 
 @app.post("/async/auto-apply", response_model=AsyncTaskResponse)
 async def async_auto_apply(request: AutoApplyRequest):
-    """Enqueue auto-apply as an async Celery task."""
-    task = auto_apply_task.delay(
-        job_url=request.job_url,
-        apply_url=request.apply_url,
-        source=request.source,
-        resume_pdf_path=request.resume_pdf_path,
-        cover_letter_pdf_path=request.cover_letter_pdf_path,
-        user_name=request.user_name,
-        user_email=request.user_email,
-        user_phone=request.user_phone,
-        linkedin_url=request.linkedin_url,
-    )
+    task = auto_apply_task.delay(job_url=request.job_url, apply_url=request.apply_url, source=request.source, resume_pdf_path=request.resume_pdf_path, cover_letter_pdf_path=request.cover_letter_pdf_path, user_name=request.user_name, user_email=request.user_email, user_phone=request.user_phone, linkedin_url=request.linkedin_url)
     logger.info(f"Enqueued async auto-apply: task_id={task.id}")
     return AsyncTaskResponse(task_id=task.id, status="queued")
-
-
-# ---- AI/ML Feature Endpoints ----
 
 
 class MatchScoreRequest(BaseModel):
@@ -472,37 +329,19 @@ class CompanyResearchRequest(BaseModel):
 
 
 @app.post("/api/resume/parse")
-async def parse_resume_pdf(
-    file: UploadFile = File(...),
-    llm_provider: Optional[str] = Form(None),
-    llm_model: Optional[str] = Form(None),
-    llm_api_key: Optional[str] = Form(None),
-):
-    """Parse a resume PDF and extract structured data."""
+async def parse_resume_pdf(file: UploadFile = File(...), llm_provider: Optional[str] = Form(None), llm_model: Optional[str] = Form(None), llm_api_key: Optional[str] = Form(None)):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
-
     try:
-        # Save uploaded file to temp location
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             content = await file.read()
             tmp.write(content)
             tmp_path = tmp.name
-
-        result = resume_pdf_parser.parse_pdf(
-            pdf_path=tmp_path,
-            llm_provider=llm_provider,
-            llm_api_key=llm_api_key,
-            llm_model=llm_model,
-        )
-
-        # Clean up temp file
+        result = resume_pdf_parser.parse_pdf(pdf_path=tmp_path, llm_provider=llm_provider, llm_api_key=llm_api_key, llm_model=llm_model)
         os.unlink(tmp_path)
-
         return result
     except Exception as e:
         logger.error(f"Resume parsing failed: {e}")
-        # Clean up temp file on error
         try:
             os.unlink(tmp_path)
         except Exception:
@@ -512,15 +351,8 @@ async def parse_resume_pdf(
 
 @app.post("/api/matching/score")
 async def match_score(request: MatchScoreRequest):
-    """Compute match score between resume and job description using embeddings."""
     try:
-        result = embedding_service.compute_match_score(
-            resume_text=request.resume_text,
-            job_description=request.job_description,
-            resume_skills=request.resume_skills,
-            job_skills=request.job_skills,
-        )
-        return result
+        return embedding_service.compute_match_score(resume_text=request.resume_text, job_description=request.job_description, resume_skills=request.resume_skills, job_skills=request.job_skills)
     except Exception as e:
         logger.error(f"Match scoring failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -528,16 +360,8 @@ async def match_score(request: MatchScoreRequest):
 
 @app.post("/api/ats/score")
 async def ats_score(request: ATSScoreRequest):
-    """Score a resume for ATS compatibility against a job description."""
     try:
-        result = ats_scorer.score(
-            resume_text=request.resume_text,
-            job_description=request.job_description,
-            llm_provider=request.llm_provider,
-            llm_api_key=request.llm_api_key,
-            llm_model=request.llm_model,
-        )
-        return result
+        return ats_scorer.score(resume_text=request.resume_text, job_description=request.job_description, llm_provider=request.llm_provider, llm_api_key=request.llm_api_key, llm_model=request.llm_model)
     except Exception as e:
         logger.error(f"ATS scoring failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -545,16 +369,8 @@ async def ats_score(request: ATSScoreRequest):
 
 @app.post("/api/skills-gap")
 async def skills_gap(request: SkillsGapRequest):
-    """Analyze skills gap between resume and job description."""
     try:
-        result = skills_gap_analyzer.analyze(
-            resume_text=request.resume_text,
-            job_description=request.job_description,
-            llm_provider=request.llm_provider,
-            llm_api_key=request.llm_api_key,
-            llm_model=request.llm_model,
-        )
-        return result
+        return skills_gap_analyzer.analyze(resume_text=request.resume_text, job_description=request.job_description, llm_provider=request.llm_provider, llm_api_key=request.llm_api_key, llm_model=request.llm_model)
     except Exception as e:
         logger.error(f"Skills gap analysis failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -562,16 +378,8 @@ async def skills_gap(request: SkillsGapRequest):
 
 @app.post("/api/interview/questions")
 async def interview_questions(request: InterviewQuestionsRequest):
-    """Generate interview questions based on job description."""
     try:
-        result = interview_prep.generate_questions(
-            job_description=request.job_description,
-            num_questions=request.num_questions,
-            llm_provider=request.llm_provider,
-            llm_api_key=request.llm_api_key,
-            llm_model=request.llm_model,
-        )
-        return result
+        return interview_prep.generate_questions(job_description=request.job_description, num_questions=request.num_questions, llm_provider=request.llm_provider, llm_api_key=request.llm_api_key, llm_model=request.llm_model)
     except Exception as e:
         logger.error(f"Interview question generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -579,17 +387,8 @@ async def interview_questions(request: InterviewQuestionsRequest):
 
 @app.post("/api/interview/evaluate")
 async def interview_evaluate(request: InterviewEvaluateRequest):
-    """Evaluate a candidate's answer to an interview question."""
     try:
-        result = interview_prep.evaluate_answer(
-            question=request.question,
-            answer=request.answer,
-            job_description=request.job_description,
-            llm_provider=request.llm_provider,
-            llm_api_key=request.llm_api_key,
-            llm_model=request.llm_model,
-        )
-        return result
+        return interview_prep.evaluate_answer(question=request.question, answer=request.answer, job_description=request.job_description, llm_provider=request.llm_provider, llm_api_key=request.llm_api_key, llm_model=request.llm_model)
     except Exception as e:
         logger.error(f"Answer evaluation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -597,17 +396,8 @@ async def interview_evaluate(request: InterviewEvaluateRequest):
 
 @app.post("/api/salary/analyze")
 async def salary_analyze(request: SalaryAnalyzeRequest):
-    """Estimate salary range and provide negotiation insights."""
     try:
-        result = salary_analyzer.analyze(
-            job_title=request.job_title,
-            location=request.location,
-            experience_years=request.experience_years,
-            llm_provider=request.llm_provider,
-            llm_api_key=request.llm_api_key,
-            llm_model=request.llm_model,
-        )
-        return result
+        return salary_analyzer.analyze(job_title=request.job_title, location=request.location, experience_years=request.experience_years, llm_provider=request.llm_provider, llm_api_key=request.llm_api_key, llm_model=request.llm_model)
     except Exception as e:
         logger.error(f"Salary analysis failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -615,116 +405,55 @@ async def salary_analyze(request: SalaryAnalyzeRequest):
 
 @app.post("/api/company/research")
 async def company_research(request: CompanyResearchRequest):
-    """Research a company using web scraping + RAG + LLM analysis."""
     try:
-        result = company_researcher.research(
-            company_name=request.company_name,
-            company_url=request.company_url,
-            llm_provider=request.llm_provider,
-            llm_api_key=request.llm_api_key,
-            llm_model=request.llm_model,
-        )
-        return result
+        return company_researcher.research(company_name=request.company_name, company_url=request.company_url, llm_provider=request.llm_provider, llm_api_key=request.llm_api_key, llm_model=request.llm_model)
     except Exception as e:
         logger.error(f"Company research failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ---- Async AI/ML Endpoints (Celery-backed) ----
-
-
 @app.post("/async/resume/parse", response_model=AsyncTaskResponse)
-async def async_parse_resume(
-    file: UploadFile = File(...),
-    llm_provider: Optional[str] = Form(None),
-    llm_model: Optional[str] = Form(None),
-    llm_api_key: Optional[str] = Form(None),
-):
-    """Enqueue resume PDF parsing as an async Celery task."""
+async def async_parse_resume(file: UploadFile = File(...), llm_provider: Optional[str] = Form(None), llm_model: Optional[str] = Form(None), llm_api_key: Optional[str] = Form(None)):
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
-
-    # Save uploaded file to persistent temp location
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf", dir=str(OUTPUT_DIR)) as tmp:
         content = await file.read()
         tmp.write(content)
         tmp_path = tmp.name
-
-    task = parse_resume_task.delay(
-        pdf_path=tmp_path,
-        llm_provider=llm_provider,
-        llm_model=llm_model,
-        llm_api_key=llm_api_key,
-    )
+    task = parse_resume_task.delay(pdf_path=tmp_path, llm_provider=llm_provider, llm_model=llm_model, llm_api_key=llm_api_key)
     logger.info(f"Enqueued async resume parsing: task_id={task.id}")
     return AsyncTaskResponse(task_id=task.id, status="queued")
 
 
 @app.post("/async/matching/score", response_model=AsyncTaskResponse)
 async def async_match_score(request: MatchScoreRequest):
-    """Enqueue match scoring as an async Celery task."""
-    task = compute_match_score_task.delay(
-        resume_text=request.resume_text,
-        job_description=request.job_description,
-        resume_skills=request.resume_skills,
-        job_skills=request.job_skills,
-    )
+    task = compute_match_score_task.delay(resume_text=request.resume_text, job_description=request.job_description, resume_skills=request.resume_skills, job_skills=request.job_skills)
     logger.info(f"Enqueued async match scoring: task_id={task.id}")
     return AsyncTaskResponse(task_id=task.id, status="queued")
 
 
 @app.post("/async/ats/score", response_model=AsyncTaskResponse)
 async def async_ats_score(request: ATSScoreRequest):
-    """Enqueue ATS scoring as an async Celery task."""
-    task = ats_score_task.delay(
-        resume_text=request.resume_text,
-        job_description=request.job_description,
-        llm_provider=request.llm_provider,
-        llm_model=request.llm_model,
-        llm_api_key=request.llm_api_key,
-    )
+    task = ats_score_task.delay(resume_text=request.resume_text, job_description=request.job_description, llm_provider=request.llm_provider, llm_model=request.llm_model, llm_api_key=request.llm_api_key)
     logger.info(f"Enqueued async ATS scoring: task_id={task.id}")
     return AsyncTaskResponse(task_id=task.id, status="queued")
 
 
 @app.post("/async/interview/questions", response_model=AsyncTaskResponse)
 async def async_interview_questions(request: InterviewQuestionsRequest):
-    """Enqueue interview question generation as an async Celery task."""
-    task = interview_questions_task.delay(
-        job_description=request.job_description,
-        num_questions=request.num_questions,
-        llm_provider=request.llm_provider,
-        llm_model=request.llm_model,
-        llm_api_key=request.llm_api_key,
-    )
+    task = interview_questions_task.delay(job_description=request.job_description, num_questions=request.num_questions, llm_provider=request.llm_provider, llm_model=request.llm_model, llm_api_key=request.llm_api_key)
     logger.info(f"Enqueued async interview questions: task_id={task.id}")
     return AsyncTaskResponse(task_id=task.id, status="queued")
 
 
-# ---- Metadata Endpoints ----
-
 @app.get("/styles")
 async def list_styles():
-    return {
-        "styles": [
-            {"id": "modern", "name": "Modern", "description": "Clean, contemporary design with accent colors"},
-            {"id": "classic", "name": "Classic", "description": "Traditional, professional layout"},
-            {"id": "minimal", "name": "Minimal", "description": "Simple, elegant with focus on content"},
-            {"id": "creative", "name": "Creative", "description": "Bold design for creative roles"},
-            {"id": "professional", "name": "Professional", "description": "Corporate-focused, ATS-friendly"},
-        ]
-    }
+    return {"styles": [{"id": "modern", "name": "Modern", "description": "Clean, contemporary design with accent colors"}, {"id": "classic", "name": "Classic", "description": "Traditional, professional layout"}, {"id": "minimal", "name": "Minimal", "description": "Simple, elegant with focus on content"}, {"id": "creative", "name": "Creative", "description": "Bold design for creative roles"}, {"id": "professional", "name": "Professional", "description": "Corporate-focused, ATS-friendly"}]}
 
 
 @app.get("/templates")
 async def list_templates():
-    return {
-        "templates": [
-            {"id": "standard", "name": "Standard Resume", "sections": ["experience", "education", "skills"]},
-            {"id": "executive", "name": "Executive Resume", "sections": ["summary", "achievements", "experience"]},
-            {"id": "technical", "name": "Technical Resume", "sections": ["skills", "projects", "experience"]},
-        ]
-    }
+    return {"templates": [{"id": "standard", "name": "Standard Resume", "sections": ["experience", "education", "skills"]}, {"id": "executive", "name": "Executive Resume", "sections": ["summary", "achievements", "experience"]}, {"id": "technical", "name": "Technical Resume", "sections": ["skills", "projects", "experience"]}]}
 
 
 if __name__ == "__main__":
