@@ -1,6 +1,6 @@
 import logging
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -10,11 +10,11 @@ class SalaryEstimate(BaseModel):
     median: int = Field(description="Median/typical salary")
     high: int = Field(description="High end of salary range")
     currency: str = Field(default="USD", description="Currency code")
-    factors: list[str] = Field(
+    factors: List[str] = Field(
         default_factory=list,
         description="Key factors affecting salary for this role",
     )
-    negotiation_tips: list[str] = Field(
+    negotiation_tips: List[str] = Field(
         default_factory=list,
         description="Practical tips for salary negotiation",
     )

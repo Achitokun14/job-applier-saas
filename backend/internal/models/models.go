@@ -56,17 +56,18 @@ type Resume struct {
 }
 
 type Job struct {
-	ID          uint      `gorm:"primarykey" json:"id"`
-	CreatedAt   time.Time `json:"created_at"`
-	ExternalID  string    `gorm:"index" json:"external_id"`
-	Title       string    `gorm:"index" json:"title"`
-	Company     string    `gorm:"index" json:"company"`
-	Location    string    `json:"location"`
-	Description string    `gorm:"type:text" json:"description"`
-	URL         string    `json:"url"`
-	Source      string    `gorm:"index" json:"source"`
-	Remote      bool      `json:"remote"`
-	Salary      string    `json:"salary"`
+	ID           uint      `gorm:"primarykey" json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	ExternalID   string    `gorm:"index" json:"external_id"`
+	Title        string    `gorm:"index" json:"title"`
+	Company      string    `gorm:"index" json:"company"`
+	Location     string    `json:"location"`
+	Description  string    `gorm:"type:text" json:"description"`
+	URL          string    `json:"url"`
+	Source       string    `gorm:"index" json:"source"`
+	Remote       bool      `json:"remote"`
+	Salary       string    `json:"salary"`
+	SearchVector string    `gorm:"type:tsvector" json:"-"`
 }
 
 type Application struct {

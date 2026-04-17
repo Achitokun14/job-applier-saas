@@ -1,5 +1,9 @@
 import logging
+import os
+
 import numpy as np
+
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -8,16 +12,17 @@ class EmbeddingService:
     def __init__(self):
         self._model = None
         self._index = None
+        self._model_name = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 
     @property
     def model(self):
         if self._model is None:
             from sentence_transformers import SentenceTransformer
 
-            self._model = SentenceTransformer("all-MiniLM-L6-v2")
+            self._model = SentenceTransformer(self._model_name)
         return self._model
 
-    def embed(self, text: str) -> list[float]:
+    def embed(self, text: str) -> List[float]:
         """Generate embedding for text."""
         embedding = self.model.encode(text, normalize_embeddings=True)
         return embedding.tolist()
@@ -26,8 +31,8 @@ class EmbeddingService:
         self,
         resume_text: str,
         job_description: str,
-        resume_skills: list[str] = None,
-        job_skills: list[str] = None,
+        resume_skills: List[str] = None,
+        job_skills: List[str] = None,
     ) -> dict:
         """Compute weighted match score between resume and job."""
         # 1. Semantic similarity (40%)

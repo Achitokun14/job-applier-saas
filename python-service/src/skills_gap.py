@@ -1,6 +1,6 @@
 import logging
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -24,15 +24,15 @@ class PartialMatch(BaseModel):
 
 
 class SkillsGapResult(BaseModel):
-    present_skills: list[str] = Field(
+    present_skills: List[str] = Field(
         default_factory=list,
         description="Skills from the job description that are present in the resume",
     )
-    missing_skills: list[MissingSkill] = Field(
+    missing_skills: List[MissingSkill] = Field(
         default_factory=list,
         description="Skills required by the job but missing from the resume",
     )
-    partial_matches: list[PartialMatch] = Field(
+    partial_matches: List[PartialMatch] = Field(
         default_factory=list,
         description="Skills that partially match between resume and job",
     )

@@ -7,24 +7,23 @@ logger = logging.getLogger(__name__)
 
 
 class LLMCache:
-    def __init__(self, redis_url: str = "redis://redis:6379/2"):
-        self._redis = None
+    def __init__(self, redis_url: str = "redis://redis:6379/3"):
         self._redis_url = redis_url
+        self._redis = None
+        try:
+            import redis as redis_lib
+
+            self._redis = redis_lib.Redis.from_url(
+                self._redis_url, decode_responses=True
+            )
+            # Test connection
+            self._redis.ping()
+        except Exception as e:
+            logger.warning(f"Redis cache unavailable: {e}")
+            self._redis = None
 
     @property
     def redis(self):
-        if self._redis is None:
-            try:
-                import redis
-
-                self._redis = redis.Redis.from_url(
-                    self._redis_url, decode_responses=True
-                )
-                # Test connection
-                self._redis.ping()
-            except Exception as e:
-                logger.warning(f"Redis cache unavailable: {e}")
-                self._redis = None
         return self._redis
 
     def make_key(self, template_name: str, model: str, input_text: str) -> str:

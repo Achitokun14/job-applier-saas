@@ -53,7 +53,7 @@ func main() {
 		lg.Fatal().Err(err).Msg("Failed to connect to database")
 	}
 
-	if err := database.AutoMigrate(db, cfg.AppEnv); err != nil {
+	if err := database.AutoMigrate(db, cfg.AppEnv, cfg.DatabaseURL); err != nil {
 		lg.Fatal().Err(err).Msg("Failed to run migrations")
 	}
 

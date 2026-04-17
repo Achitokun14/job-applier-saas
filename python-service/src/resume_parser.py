@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -11,12 +11,12 @@ class ParsedResume(BaseModel):
     phone: str = ""
     location: str = ""
     summary: str = ""
-    experience: list[dict] = Field(default_factory=list)  # [{title, company, dates, description}]
-    education: list[dict] = Field(default_factory=list)  # [{degree, school, dates}]
-    skills: list[str] = Field(default_factory=list)
-    projects: list[dict] = Field(default_factory=list)  # [{name, description}]
-    certifications: list[str] = Field(default_factory=list)
-    languages: list[str] = Field(default_factory=list)
+    experience: List[dict] = Field(default_factory=list)  # [{title, company, dates, description}]
+    education: List[dict] = Field(default_factory=list)  # [{degree, school, dates}]
+    skills: List[str] = Field(default_factory=list)
+    projects: List[dict] = Field(default_factory=list)  # [{name, description}]
+    certifications: List[str] = Field(default_factory=list)
+    languages: List[str] = Field(default_factory=list)
 
 
 class ResumeParser:
