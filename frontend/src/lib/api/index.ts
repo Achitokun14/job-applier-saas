@@ -46,15 +46,26 @@ export const api = {
     }),
 
   // Jobs
-  searchJobs: (query: string, token: string) =>
-    request<Array<{ id: number; title: string; company: string; location: string; description: string }>>(
-      `/api/v1/jobs?q=${encodeURIComponent(query)}`,
-      { token }
-    ),
+  searchJobs: (params: { query?: string; location?: string; remote?: string; jobType?: string; page?: number }, token: string) => {
+    const searchParams = new URLSearchParams();
+    if (params.query) searchParams.set('q', params.query);
+    if (params.location) searchParams.set('location', params.location);
+    if (params.remote && params.remote !== 'all') searchParams.set('remote', params.remote);
+    if (params.jobType && params.jobType !== 'all') searchParams.set('job_type', params.jobType);
+    if (params.page) searchParams.set('page', String(params.page));
+    return request<{ jobs: any[]; total: number; page: number }>(`/api/v1/jobs?${searchParams.toString()}`, { token });
+  },
 
   applyJob: (jobId: number, token: string) =>
     request<{ message: string }>(`/api/v1/jobs/${jobId}/apply`, {
       method: 'POST',
+      token
+    }),
+
+  bulkApply: (jobIds: number[], token: string) =>
+    request<{ applied: number; skipped: number; errors: string[] }>('/api/v1/jobs/bulk-apply', {
+      method: 'POST',
+      body: { job_ids: jobIds },
       token
     }),
 
