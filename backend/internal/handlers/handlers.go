@@ -248,7 +248,11 @@ func hashToken(token string) string {
 }
 
 func (h *Handlers) GetProfile(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	user, err := h.userRepo.FindByID(r.Context(), userID)
 	if err != nil {
@@ -277,7 +281,11 @@ func (h *Handlers) GetProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) UpdateProfile(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	var input struct {
 		Name        string `json:"name"`
@@ -399,7 +407,11 @@ func (h *Handlers) SearchJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) ApplyJob(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 	jobID := chi.URLParam(r, "id")
 
 	// Check usage limit for applications
@@ -450,7 +462,11 @@ func (h *Handlers) ApplyJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) ListApplications(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 	status := r.URL.Query().Get("status")
 	pageStr := r.URL.Query().Get("page")
 	perPageStr := r.URL.Query().Get("per_page")
@@ -484,7 +500,11 @@ func (h *Handlers) ListApplications(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) GetApplication(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 	appID := chi.URLParam(r, "id")
 
 	var application models.Application
@@ -497,7 +517,11 @@ func (h *Handlers) GetApplication(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) DeleteApplication(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 	appID := chi.URLParam(r, "id")
 
 	if err := h.db.Where("user_id = ? AND id = ?", userID, appID).Delete(&models.Application{}).Error; err != nil {
@@ -509,7 +533,11 @@ func (h *Handlers) DeleteApplication(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) GenerateResume(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	// Check usage limit for resume generation
 	allowed, err := services.CheckLimit(h.db, userID, "resume_gen")
@@ -593,7 +621,11 @@ func (h *Handlers) GenerateResume(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) GenerateCoverLetter(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	// Check usage limit for cover letter generation
 	allowed, err := services.CheckLimit(h.db, userID, "cover_letter_gen")
@@ -677,7 +709,11 @@ func (h *Handlers) GenerateCoverLetter(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) GetSettings(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	settings, err := h.settingsRepo.GetByUserID(r.Context(), userID)
 	if err != nil {
@@ -701,7 +737,11 @@ func (h *Handlers) GetSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) UpdateSettings(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	var input models.Settings
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -831,7 +871,11 @@ func (h *Handlers) IngestJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) TriggerScrape(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	// Read user settings for search parameters
 	var settings models.Settings
@@ -967,7 +1011,11 @@ func (h *Handlers) TriggerScrape(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) AutoApply(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 	jobID := chi.URLParam(r, "id")
 
 	// 1. Get the job from the database
@@ -1088,7 +1136,11 @@ func (h *Handlers) AutoApply(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handlers) BulkApply(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(userIDKey).(uint)
+	userID, ok := r.Context().Value(userIDKey).(uint)
+	if !ok {
+		h.respondError(w, http.StatusUnauthorized, "Authentication required")
+		return
+	}
 
 	var input struct {
 		JobIDs []uint `json:"job_ids"`
