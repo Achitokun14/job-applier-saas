@@ -1,13 +1,14 @@
 import logging
+import os
 import re
 from pathlib import Path
 from urllib.parse import urlparse
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
-CHROMA_DIR = Path("data_folder/chroma")
+CHROMA_DIR = Path(os.getenv("CHROMA_DIR", "data_folder/chroma"))
 CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -21,7 +22,7 @@ class CompanyInfo(BaseModel):
     recent_news: str = Field(
         default="", description="Recent news, developments, or announcements"
     )
-    key_facts: list[str] = Field(
+    key_facts: List[str] = Field(
         default_factory=list,
         description="Key facts about the company useful for interviews/cover letters",
     )
@@ -78,7 +79,7 @@ class CompanyResearcher:
             logger.warning(f"Failed to fetch {url}: {e}")
             return ""
 
-    def _chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+    def _chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
         """Split text into overlapping chunks."""
         if not text:
             return []
@@ -99,7 +100,7 @@ class CompanyResearcher:
             name = name + "_co"
         return name[:63]
 
-    def _store_in_chroma(self, company_name: str, texts: list[str]) -> None:
+    def _store_in_chroma(self, company_name: str, texts: List[str]) -> None:
         """Store text chunks in ChromaDB collection."""
         if not texts:
             return
