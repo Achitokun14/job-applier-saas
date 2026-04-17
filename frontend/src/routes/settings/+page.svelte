@@ -37,7 +37,6 @@
       const token = $auth.token;
       settings = await api.getSettings(token);
 
-      // Map snake_case API fields to local state
       llmProvider = settings.llm_provider || settings.llmProvider || 'openai';
       llmModel = settings.llm_model || settings.llmModel || 'gpt-4o-mini';
       jobSearchRemote = settings.job_search_remote ?? settings.jobSearchRemote ?? true;
@@ -50,7 +49,6 @@
       companyBlacklist = settings.company_blacklist || settings.companyBlacklist || '';
       titleBlacklist = settings.title_blacklist || settings.titleBlacklist || '';
 
-      // Locations can be array or string
       if (Array.isArray(settings.locations)) {
         locations = settings.locations.join(', ');
       } else {
@@ -83,7 +81,6 @@
         company_blacklist: companyBlacklist,
         title_blacklist: titleBlacklist
       };
-      // Remove undefined keys
       Object.keys(payload).forEach(key => {
         if (payload[key] === undefined) delete payload[key];
       });
@@ -98,18 +95,38 @@
 
   let availableModels = $derived(() => {
     if (llmProvider === 'openai') return [
-      { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
       { value: 'gpt-4o', label: 'GPT-4o' },
+      { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
       { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+      { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' },
     ];
     if (llmProvider === 'anthropic') return [
-      { value: 'claude-3-haiku', label: 'Claude 3 Haiku' },
-      { value: 'claude-3-sonnet', label: 'Claude 3.5 Sonnet' },
-      { value: 'claude-3-opus', label: 'Claude 3 Opus' },
+      { value: 'claude-opus-4-6', label: 'Claude Opus 4' },
+      { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4' },
+      { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 3.5' },
+    ];
+    if (llmProvider === 'google') return [
+      { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
+      { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+      { value: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite' },
+    ];
+    if (llmProvider === 'groq') return [
+      { value: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant' },
+      { value: 'llama-3.1-70b-versatile', label: 'Llama 3.1 70B Versatile' },
+      { value: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B' },
+    ];
+    if (llmProvider === 'mistral') return [
+      { value: 'mistral-small-latest', label: 'Mistral Small' },
+      { value: 'mistral-medium-latest', label: 'Mistral Medium' },
+      { value: 'mistral-large-latest', label: 'Mistral Large' },
+    ];
+    if (llmProvider === 'ollama') return [
+      { value: 'llama3', label: 'Llama 3' },
+      { value: 'codellama', label: 'Code Llama' },
+      { value: 'mistral', label: 'Mistral' },
     ];
     return [
-      { value: 'gemini-pro', label: 'Gemini Pro' },
-      { value: 'gemini-ultra', label: 'Gemini Ultra' },
+      { value: 'gpt-4o-mini', label: 'GPT-4o Mini' },
     ];
   });
 </script>
@@ -119,7 +136,6 @@
 </svelte:head>
 
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <!-- Header -->
   <div class="mb-8 animate-fade-in">
     <h1 class="text-2xl sm:text-3xl font-bold text-foreground">Settings</h1>
     <p class="text-muted-foreground mt-1">Configure your AI provider and job search preferences</p>
@@ -133,7 +149,6 @@
     </div>
   {:else}
     <form onsubmit={(e) => { e.preventDefault(); saveSettings(); }} class="space-y-6">
-      <!-- AI Configuration -->
       <Card class="animate-fade-in-up">
         <CardHeader class="pb-4">
           <div class="flex items-center gap-3">
@@ -150,54 +165,33 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-2">
               <label for="llmProvider" class="text-sm font-medium text-foreground">Provider</label>
-              <select
-                id="llmProvider"
-                bind:value={llmProvider}
-                class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
-              >
+              <select id="llmProvider" bind:value={llmProvider} class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors">
                 <option value="openai">OpenAI</option>
                 <option value="anthropic">Anthropic</option>
                 <option value="google">Google Gemini</option>
+                <option value="groq">Groq</option>
+                <option value="mistral">Mistral</option>
+                <option value="ollama">Ollama (Local)</option>
               </select>
             </div>
-
             <div class="space-y-2">
               <label for="llmModel" class="text-sm font-medium text-foreground">Model</label>
-              <select
-                id="llmModel"
-                bind:value={llmModel}
-                class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
-              >
+              <select id="llmModel" bind:value={llmModel} class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors">
                 {#each availableModels() as model}
                   <option value={model.value}>{model.label}</option>
                 {/each}
               </select>
             </div>
           </div>
-
           <div class="space-y-2">
             <label for="llmApiKey" class="text-sm font-medium text-foreground flex items-center gap-2">
               <Key size={14} class="text-muted-foreground" />
               API Key
             </label>
             <div class="relative">
-              <Input
-                type={showApiKey ? 'text' : 'password'}
-                id="llmApiKey"
-                bind:value={llmApiKey}
-                placeholder="sk-..."
-                class="pr-10 font-mono text-xs"
-              />
-              <button
-                type="button"
-                onclick={() => showApiKey = !showApiKey}
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-              >
-                {#if showApiKey}
-                  <EyeOff size={16} />
-                {:else}
-                  <Eye size={16} />
-                {/if}
+              <Input type={showApiKey ? 'text' : 'password'} id="llmApiKey" bind:value={llmApiKey} placeholder="sk-..." class="pr-10 font-mono text-xs" />
+              <button type="button" onclick={() => showApiKey = !showApiKey} class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer">
+                {#if showApiKey}<EyeOff size={16} />{:else}<Eye size={16} />{/if}
               </button>
             </div>
             <p class="text-xs text-muted-foreground">Your API key is encrypted with AES-256-GCM before storage</p>
@@ -205,7 +199,6 @@
         </CardContent>
       </Card>
 
-      <!-- Job Search Preferences -->
       <Card class="animate-fade-in-up delay-100">
         <CardHeader class="pb-4">
           <div class="flex items-center gap-3">
@@ -219,45 +212,27 @@
           </div>
         </CardHeader>
         <CardContent class="space-y-5">
-          <!-- Work Type -->
           <div class="space-y-3">
             <label class="text-sm font-medium text-foreground">Work Type</label>
             <div class="flex flex-wrap gap-3">
               <label class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-input hover:border-primary/30 transition-colors cursor-pointer {jobSearchRemote ? 'bg-primary/5 border-primary/30' : ''}">
-                <input
-                  type="checkbox"
-                  bind:checked={jobSearchRemote}
-                  class="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                />
+                <input type="checkbox" bind:checked={jobSearchRemote} class="h-4 w-4 rounded border-input text-primary focus:ring-ring" />
                 <span class="text-sm text-foreground">Remote</span>
               </label>
               <label class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-input hover:border-primary/30 transition-colors cursor-pointer {jobSearchHybrid ? 'bg-primary/5 border-primary/30' : ''}">
-                <input
-                  type="checkbox"
-                  bind:checked={jobSearchHybrid}
-                  class="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                />
+                <input type="checkbox" bind:checked={jobSearchHybrid} class="h-4 w-4 rounded border-input text-primary focus:ring-ring" />
                 <span class="text-sm text-foreground">Hybrid</span>
               </label>
               <label class="flex items-center gap-2.5 px-4 py-2.5 rounded-lg border border-input hover:border-primary/30 transition-colors cursor-pointer {jobSearchOnsite ? 'bg-primary/5 border-primary/30' : ''}">
-                <input
-                  type="checkbox"
-                  bind:checked={jobSearchOnsite}
-                  class="h-4 w-4 rounded border-input text-primary focus:ring-ring"
-                />
+                <input type="checkbox" bind:checked={jobSearchOnsite} class="h-4 w-4 rounded border-input text-primary focus:ring-ring" />
                 <span class="text-sm text-foreground">On-site</span>
               </label>
             </div>
           </div>
-
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="space-y-2">
               <label for="experienceLevel" class="text-sm font-medium text-foreground">Experience Level</label>
-              <select
-                id="experienceLevel"
-                bind:value={experienceLevel}
-                class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
-              >
+              <select id="experienceLevel" bind:value={experienceLevel} class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors">
                 <option value="entry">Entry Level</option>
                 <option value="mid">Mid-Level</option>
                 <option value="mid_senior">Mid-Senior</option>
@@ -265,14 +240,9 @@
                 <option value="lead">Lead / Principal</option>
               </select>
             </div>
-
             <div class="space-y-2">
               <label for="jobTypes" class="text-sm font-medium text-foreground">Job Type</label>
-              <select
-                id="jobTypes"
-                bind:value={jobTypes}
-                class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors"
-              >
+              <select id="jobTypes" bind:value={jobTypes} class="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 transition-colors">
                 <option value="full_time">Full-time</option>
                 <option value="part_time">Part-time</option>
                 <option value="contract">Contract</option>
@@ -280,7 +250,6 @@
               </select>
             </div>
           </div>
-
           <div class="space-y-2">
             <label for="positions" class="text-sm font-medium text-foreground flex items-center gap-2">
               <Briefcase size={14} class="text-muted-foreground" />
@@ -289,7 +258,6 @@
             <Input type="text" id="positions" bind:value={positions} placeholder="e.g., Software Engineer, Full Stack Developer, Backend Engineer" />
             <p class="text-xs text-muted-foreground">Comma-separated list of job titles you are targeting</p>
           </div>
-
           <div class="space-y-2">
             <label for="locations" class="text-sm font-medium text-foreground">Preferred Locations</label>
             <Input type="text" id="locations" bind:value={locations} placeholder="e.g., San Francisco, New York, Remote" />
@@ -298,7 +266,6 @@
         </CardContent>
       </Card>
 
-      <!-- Blacklists -->
       <Card class="animate-fade-in-up delay-200">
         <CardHeader class="pb-4">
           <div class="flex items-center gap-3">
@@ -314,31 +281,17 @@
         <CardContent class="space-y-4">
           <div class="space-y-2">
             <label for="companyBlacklist" class="text-sm font-medium text-foreground">Company Blacklist</label>
-            <textarea
-              id="companyBlacklist"
-              bind:value={companyBlacklist}
-              rows="3"
-              placeholder="e.g., Acme Corp, Evil Inc, Spam LLC"
-              class="flex w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y transition-colors"
-            ></textarea>
+            <textarea id="companyBlacklist" bind:value={companyBlacklist} rows="3" placeholder="e.g., Acme Corp, Evil Inc, Spam LLC" class="flex w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y transition-colors"></textarea>
             <p class="text-xs text-muted-foreground">Comma-separated list of companies to exclude from job results</p>
           </div>
-
           <div class="space-y-2">
             <label for="titleBlacklist" class="text-sm font-medium text-foreground">Title Blacklist</label>
-            <textarea
-              id="titleBlacklist"
-              bind:value={titleBlacklist}
-              rows="3"
-              placeholder="e.g., Sales, Marketing Manager, Cold Caller"
-              class="flex w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y transition-colors"
-            ></textarea>
+            <textarea id="titleBlacklist" bind:value={titleBlacklist} rows="3" placeholder="e.g., Sales, Marketing Manager, Cold Caller" class="flex w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y transition-colors"></textarea>
             <p class="text-xs text-muted-foreground">Comma-separated list of job title keywords to exclude</p>
           </div>
         </CardContent>
       </Card>
 
-      <!-- Save -->
       <div class="flex justify-end pt-2 animate-fade-in-up delay-300">
         <Button type="submit" disabled={saving}>
           {#if saving}

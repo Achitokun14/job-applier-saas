@@ -23,14 +23,16 @@
   let selectedJobs = $state(new Set());
   let bulkApplying = $state(false);
 
-  onMount(() => {
+  onMount(async () => {
     if (!$auth.isAuthenticated) {
       goto('/login');
+      return;
     }
+    // Auto-load all jobs on initial visit
+    await fetchJobs();
   });
 
-  async function search() {
-    if (!query.trim()) return;
+  async function fetchJobs(searchQuery = '') {
     loading = true;
     error = '';
     searched = true;
@@ -38,17 +40,63 @@
     try {
       const token = $auth.token;
       const data = await api.searchJobs({
-        query: query.trim(),
+        query: searchQuery || undefined,
         location: location.trim() || undefined,
         remote: remote,
         jobType: jobType
       }, token);
-      jobs = data.jobs || [];
+
+      // Check if the API returned an error field inside a 200 response
+      if (data && (data as any).error) {
+        // Text search failed - retry without query (browse all mode)
+        if (searchQuery) {
+          toast.info('Text search unavailable, showing all jobs');
+          const fallbackData = await api.searchJobs({
+            location: location.trim() || undefined,
+            remote: remote,
+            jobType: jobType
+          }, token);
+
+          if (fallbackData && (fallbackData as any).error) {
+            error = 'Failed to load jobs. Please try again.';
+            jobs = [];
+          } else {
+            jobs = fallbackData.jobs || [];
+          }
+        } else {
+          error = 'Failed to load jobs. Please try again.';
+          jobs = [];
+        }
+      } else {
+        jobs = data.jobs || [];
+      }
     } catch (e) {
-      error = 'Search failed. Please try again.';
+      // Network or HTTP error - try fallback without query
+      if (searchQuery) {
+        try {
+          toast.info('Text search unavailable, showing all jobs');
+          const token = $auth.token;
+          const fallbackData = await api.searchJobs({
+            location: location.trim() || undefined,
+            remote: remote,
+            jobType: jobType
+          }, token);
+          jobs = fallbackData.jobs || [];
+        } catch {
+          error = 'Failed to load jobs. Please try again.';
+          jobs = [];
+        }
+      } else {
+        error = 'Failed to load jobs. Please try again.';
+        jobs = [];
+      }
     } finally {
       loading = false;
     }
+  }
+
+  async function search() {
+    await fetchJobs(query.trim());
   }
 
   async function applyToJob(jobId) {
@@ -185,15 +233,17 @@
   </Card>
 
   {#if error}
-    <div class="bg-destructive/10 text-destructive text-sm p-3.5 rounded-lg mb-4 border border-destructive/20 animate-fade-in">
-      {error}
+    <div class="bg-destructive/10 text-destructive text-sm p-3.5 rounded-lg mb-4 border border-destructive/20 animate-fade-in flex items-center justify-between">
+      <span>{error}</span>
+      <Button variant="outline" size="sm" onclick={() => fetchJobs(query.trim())}>
+        Retry
+      </Button>
     </div>
   {/if}
 
   <!-- Results -->
   <div class="space-y-3">
     {#if loading}
-      <!-- Skeleton loading -->
       {#each [1,2,3,4,5] as _}
         <Card>
           <CardContent class="p-5">
@@ -209,7 +259,6 @@
         </Card>
       {/each}
     {:else if !searched}
-      <!-- Initial state -->
       <Card class="border-dashed">
         <CardContent class="p-16 text-center">
           <div class="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
@@ -222,7 +271,6 @@
         </CardContent>
       </Card>
     {:else if jobs.length === 0}
-      <!-- No results -->
       <Card class="border-dashed">
         <CardContent class="p-16 text-center">
           <div class="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mx-auto mb-4">
@@ -256,7 +304,6 @@
           <CardContent class="p-5">
             <div class="flex flex-col sm:flex-row sm:items-start gap-4">
               <div class="flex items-start gap-4 flex-1 min-w-0">
-                <!-- Checkbox -->
                 {#if !applied.has(job.id)}
                   <button
                     onclick={() => toggleSelect(job.id)}
@@ -272,7 +319,6 @@
                 {:else}
                   <div class="w-5 shrink-0"></div>
                 {/if}
-                <!-- Company avatar -->
                 <div class="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center text-sm font-bold text-primary shrink-0">
                   {(job.company || 'C')[0].toUpperCase()}
                 </div>
@@ -340,7 +386,6 @@
   </div>
 </div>
 
-<!-- Sticky bulk apply bar -->
 {#if selectedJobs.size > 0}
   <div class="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur-lg shadow-lg">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
