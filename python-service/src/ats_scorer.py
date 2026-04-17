@@ -1,7 +1,7 @@
 import logging
 import re
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -9,15 +9,15 @@ logger = logging.getLogger(__name__)
 class ATSSuggestions(BaseModel):
     """LLM-generated ATS improvement suggestions."""
 
-    suggestions: list[str] = Field(
+    suggestions: List[str] = Field(
         default_factory=list,
         description="Specific, actionable suggestions to improve ATS score",
     )
-    missing_keywords: list[str] = Field(
+    missing_keywords: List[str] = Field(
         default_factory=list,
         description="Important keywords from the job description missing in the resume",
     )
-    format_issues: list[str] = Field(
+    format_issues: List[str] = Field(
         default_factory=list,
         description="Formatting issues that may affect ATS parsing",
     )
@@ -123,14 +123,14 @@ class ATSScorer:
         bullet_lines = [
             line.strip()
             for line in lines
-            if line.strip().startswith(("-", "*", "•")) or re.match(r"^\d+\.", line.strip())
+            if line.strip().startswith(("-", "*", "\u2022")) or re.match(r"^\d+\.", line.strip())
         ]
         if bullet_lines:
             action_count = sum(
                 1
                 for line in bullet_lines
                 if any(
-                    line.lower().lstrip("-*•0123456789. ").startswith(verb)
+                    line.lower().lstrip("-*\u20220123456789. ").startswith(verb)
                     for verb in self.ACTION_VERBS
                 )
             )
@@ -207,12 +207,12 @@ class ATSScorer:
         self,
         resume_text: str,
         job_description: str,
-        criteria: list[dict],
+        criteria: List[dict],
         overall_score: float,
         llm_provider: str = None,
         llm_api_key: str = None,
         llm_model: str = None,
-    ) -> list[str]:
+    ) -> List[str]:
         """Generate LLM-powered suggestions for improving ATS score."""
         try:
             from src.llm_client import get_client
